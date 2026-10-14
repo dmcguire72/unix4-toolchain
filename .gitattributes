@@ -1,1 +1,3 @@
 * text=auto
+orig/**/* linguist-detectable=false
+tests/**/* linguist-detectable=false
