@@ -1,0 +1,449 @@
+/*
+ * Copyright 1972 Bell Telephone Laboratories, Inc.
+ */
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAXPAIRS 256
+#define MAXTEXT	 256
+
+static int nofloat;
+
+static char *ibuf;
+static size_t ipos, ilen;
+
+static int
+cgetc(void)
+{
+	int t, ifcnt;
+
+	ifcnt = 0;
+gc:
+	if (ipos >= ilen)
+		return 0;
+	t = (unsigned char)ibuf[ipos++];
+	if (t == 0)
+		return 0;
+	if (t == '{') {
+		ifcnt++;
+		t = ipos < ilen ? (unsigned char)ibuf[ipos++] : 0;
+	}
+	if (t == '}') {
+		t = cgetc();
+		if (--ifcnt == 0)
+			if (t == '\n')
+				t = cgetc();
+	}
+	if (ifcnt & nofloat)
+		goto gc;
+	return t;
+}
+
+static struct { char name[32]; int val; } syms[16];
+static int nsyms;
+
+static int
+symval(const char *n)
+{
+	int i;
+
+	for (i = 0; i < nsyms; i++)
+		if (strcmp(syms[i].name, n) == 0)
+			return syms[i].val;
+	fprintf(stderr, "cvopt: undefined symbol %s\n", n);
+	exit(1);
+}
+
+static void
+setsym(const char *n, int v)
+{
+	int i;
+
+	for (i = 0; i < nsyms; i++)
+		if (strcmp(syms[i].name, n) == 0) {
+			syms[i].val = v;
+			return;
+		}
+	if (nsyms == 16) {
+		fprintf(stderr, "cvopt: too many symbols\n");
+		exit(1);
+	}
+	snprintf(syms[nsyms].name, sizeof syms[0].name, "%s", n);
+	syms[nsyms++].val = v;
+}
+
+static int
+flag(const char **sp)
+{
+	int f = 0;
+
+	for (;; (*sp)++)
+		switch (**sp) {
+		case 'w': f = 1; break;
+		case 'i': f = 2; break;
+		case 'b': f = 3; break;
+		case 'f': f = 4; break;
+		case 'd': f = 5; break;
+		case 'p': f += 16; break;
+		default: return f;
+		}
+}
+
+static void
+spec(const char **sp, int *m, int *t, int lineno)
+{
+	switch (*(*sp)++) {
+	case 'a': *m = 16; *t = flag(sp); break;
+	case 'i': *m = 12; *t = flag(sp); break;
+	case 'z': *m = 4;  *t = 0; break;
+	case 'c': *m = 8;  *t = 0; break;
+	case 'e': *m = 20; *t = flag(sp); break;
+	case 'n': *m = 63; *t = flag(sp); break;
+	default:
+		fprintf(stderr, "cvopt: line %d: bad pattern\n", lineno);
+		exit(1);
+	}
+	if (**sp == '*') {
+		*m += 0100;
+		(*sp)++;
+	}
+}
+
+static int
+subtre(const char **sp)
+{
+	int t = 'A';
+
+	for (;; (*sp)++)
+		switch (**sp) {
+		case '*': t += 1; break;
+		case 'S': t += 2; break;
+		case 'C': t += 4; break;
+		case '1': t += 8; break;
+		default: return t;
+		}
+}
+
+static void
+cook(const char *s, char *out)
+{
+	int snlflg = 0, c;
+
+	out += strlen(out);
+	while ((c = (unsigned char)*s++) != '\0') {
+		switch (c) {
+
+		case 'A':
+			if (*s == '1' || *s == '2') {
+				*out++ = *s + 'A' - '1';
+				s++;
+			} else
+				*out++ = 'O';
+			continue;
+
+		case 'B':
+			switch (*s) {
+			case '1': *out++ = 'C'; break;
+			case '2': *out++ = 'D'; break;
+			case 'E': *out++ = 'L'; break;
+			case 'F': *out++ = 'P'; break;
+			default: *out++ = '?';
+			}
+			if (*s)
+				s++;
+			continue;
+
+		case 'C':
+			*out++ = *s++ + 'E' - '1';
+			continue;
+
+		case 'F':
+			*out++ = 'G';
+			goto sub;
+
+		case 'R':
+			if (*s == '1') {
+				*out++ = 'J';
+				s++;
+			} else
+				*out++ = 'I';
+			continue;
+
+		case 'H':
+			*out++ = 'H';
+			goto sub;
+
+		case 'I':
+			*out++ = 'M';
+			continue;
+
+		case 'M':
+			*out++ = 'N';
+			snlflg = 1;
+			continue;
+
+		case 'S':
+			*out++ = 'K';
+		sub:
+			snlflg = 1;
+			*out++ = subtre(&s);
+			continue;
+
+		case '#':
+			*out++ = *s++ == '1' ? '#' : '"';
+			continue;
+		}
+		*out++ = c;
+	}
+	if (!snlflg)
+		*out++ = '\n';
+	*out = '\0';
+}
+
+static void
+putcstr(FILE *f, const char *s)
+{
+	fputc('"', f);
+	for (; *s; s++)
+		switch (*s) {
+		case '\n': fputs("\\n", f); break;
+		case '\t': fputs("\\t", f); break;
+		case '"':  fputs("\\\"", f); break;
+		case '\\': fputs("\\\\", f); break;
+		case '?':  fputs("\\?", f); break;
+		default:
+			if (isprint((unsigned char)*s))
+				fputc(*s, f);
+			else
+				fprintf(f, "\\%03o", (unsigned char)*s);
+		}
+	fputc('"', f);
+}
+
+struct pair { int op; char label[64]; };
+
+static void
+die(int lineno, const char *msg)
+{
+	fprintf(stderr, "cvopt: line %d: %s\n", lineno, msg);
+	exit(1);
+}
+
+int
+main(int argc, char **argv)
+{
+	FILE *in = stdin, *out = stdout;
+	size_t cap = 0;
+	int c, lineno, optab = 0, listopen = 0, incode = 0, i;
+	int skip = 0, cond[16], ncond = 0;
+	char tabname[64] = "", *p, *line, *nl, name[64];
+	struct pair pairs[MAXPAIRS];
+	int npairs = 0, nm = 0;
+	struct { int m1, t1, m2, t2; } pat[16];
+	char text[MAXTEXT * 8];
+	const char *sp;
+	char *start;
+	int val;
+	char ch;
+
+	while (argc > 1 && argv[1][0] == '-' && argv[1][1] == 'n' && !argv[1][2]) {
+		nofloat = 1;
+		argc--, argv++;
+	}
+	if (argc > 3) {
+		fprintf(stderr, "usage: cvopt [-n] [infile [outfile]]\n");
+		return 1;
+	}
+	if (argc > 1 && (in = fopen(argv[1], "r")) == NULL) {
+		perror(argv[1]);
+		return 1;
+	}
+	if (argc > 2 && (out = fopen(argv[2], "w")) == NULL) {
+		perror(argv[2]);
+		return 1;
+	}
+	setsym("fp", !nofloat);
+
+	while ((c = getc(in)) != EOF) {
+		if (ilen + 1 >= cap) {
+			cap = cap ? cap * 2 : 8192;
+			if ((ibuf = realloc(ibuf, cap)) == NULL)
+				return 1;
+		}
+		ibuf[ilen++] = c;
+	}
+
+	fprintf(out, "/* Generated by cvopt; do not edit. */\n");
+	fprintf(out, "#include \"c1.h\"\n");
+
+	text[0] = '\0';
+	lineno = 0;
+	line = malloc(MAXTEXT);
+	for (;;) {
+		size_t n = 0;
+
+		while ((c = cgetc()) != 0 && c != '\n') {
+			if (n + 1 >= MAXTEXT)
+				die(lineno + 1, "line too long");
+			line[n++] = c;
+		}
+		line[n] = '\0';
+		lineno++;
+		if (c == 0 && n == 0)
+			break;
+
+		if (strncmp(line, ".if", 3) == 0) {
+			if (ncond == 16)
+				die(lineno, ".if nesting too deep");
+			p = line + 3;
+			while (*p == ' ' || *p == '\t')
+				p++;
+			cond[ncond++] = symval(p);
+			skip = 0;
+			for (i = 0; i < ncond; i++)
+				if (!cond[i])
+					skip = 1;
+			continue;
+		}
+		if (strncmp(line, ".endif", 6) == 0) {
+			if (ncond == 0)
+				die(lineno, ".endif without .if");
+			ncond--;
+			skip = 0;
+			for (i = 0; i < ncond; i++)
+				if (!cond[i])
+					skip = 1;
+			continue;
+		}
+		if (skip)
+			continue;
+
+		if (optab) {
+			if (line[0] == '\0' || line[0] == '/')
+				continue;
+			if (sscanf(line, " %d%c", &val, &ch) >= 1 && val == 0 &&
+			    !strchr(line, ';')) {
+				optab = 0;
+				continue;
+			}
+			if (sscanf(line, " %d.;%63s", &val, name) == 2) {
+				if (npairs == MAXPAIRS)
+					die(lineno, "operator table too long");
+				pairs[npairs].op = val;
+				snprintf(pairs[npairs].label,
+				    sizeof pairs[0].label, "%s", name);
+				npairs++;
+				continue;
+			}
+			optab = 0;
+		}
+
+		if (incode) {
+			if (line[0] == '\0') {
+				for (i = 0; i < nm; i++) {
+					fprintf(out, "\t{ 0%o, 0%o, 0%o, 0%o, ",
+					    pat[i].m1, pat[i].t1, pat[i].m2,
+					    pat[i].t2);
+					putcstr(out, text);
+					fprintf(out, " },\n");
+				}
+				nm = 0;
+				incode = 0;
+				continue;
+			}
+			if (line[0] != '%') {
+				start = line;
+				if (*start == '\t')
+					start++;
+				cook(start, text);
+				continue;
+			}
+		}
+
+		if (line[0] == '%') {
+			if (!listopen)
+				die(lineno, "pattern outside a list");
+			if (incode) {
+				die(lineno, "missing blank line after template");
+			}
+			if (nm == 16)
+				die(lineno, "too many patterns for one template");
+			sp = line + 1;
+			spec(&sp, &pat[nm].m1, &pat[nm].t1, lineno);
+			if (*sp++ != ',')
+				die(lineno, "bad pattern");
+			spec(&sp, &pat[nm].m2, &pat[nm].t2, lineno);
+			if (*sp != '\0')
+				die(lineno, "bad pattern");
+			nm++;
+			text[0] = '\0';
+			continue;
+		}
+		if (nm > 0) {
+			incode = 1;
+			if (line[0] == '\0') {
+				for (i = 0; i < nm; i++) {
+					fprintf(out, "\t{ 0%o, 0%o, 0%o, 0%o, \"\" },\n",
+					    pat[i].m1, pat[i].t1, pat[i].m2, pat[i].t2);
+				}
+				nm = 0;
+				incode = 0;
+				continue;
+			}
+			start = line;
+			if (*start == '\t')
+				start++;
+			text[0] = '\0';
+			cook(start, text);
+			continue;
+		}
+
+		if (line[0] == '\0' || line[0] == '/' || line[0] == '.')
+			continue;
+
+		if (isalpha((unsigned char)line[0]) &&
+		    sscanf(line, " %63[A-Za-z0-9] = %d", name, &val) == 2 &&
+		    !strchr(line, ':')) {
+			if (!(nofloat && strcmp(name, "fp") == 0))
+				setsym(name, val);
+			continue;
+		}
+
+		if (line[0] == '_' && strstr(line, "=.")) {
+			sscanf(line + 1, "%63[A-Za-z0-9_]", tabname);
+			optab = 1;
+			continue;
+		}
+
+		nl = strchr(line, ':');
+		if (nl != NULL && nl[1] == '\0' && nl > line) {
+			*nl = '\0';
+			if (listopen)
+				fprintf(out, "\t{ 0, 0, 0, 0, NULL }\n};\n\n");
+			fprintf(out, "static const struct pat %s[] = {\n", line);
+			listopen = 1;
+			continue;
+		}
+		die(lineno, "unrecognized line");
+	}
+	if (incode) {
+		for (i = 0; i < nm; i++) {
+			fprintf(out, "\t{ 0%o, 0%o, 0%o, 0%o, ", pat[i].m1, pat[i].t1,
+			    pat[i].m2, pat[i].t2);
+			putcstr(out, text);
+			fprintf(out, " },\n");
+		}
+	}
+	if (listopen)
+		fprintf(out, "\t{ 0, 0, 0, 0, NULL }\n};\n\n");
+	if (tabname[0] == '\0')
+		die(lineno, "no operator table found");
+
+	fprintf(out, "const struct optab %s[] = {\n", tabname);
+	for (i = 0; i < npairs; i++)
+		fprintf(out, "\t{ %d, %s },\n", pairs[i].op, pairs[i].label);
+	fprintf(out, "\t{ 0, NULL }\n};\n");
+	return fflush(out) == EOF || ferror(out);
+}
