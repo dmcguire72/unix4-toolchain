@@ -1,0 +1,75 @@
+.globl	_malloc
+.text
+_malloc:
+jsr	r5,rsave; 2
+mov	4.(r5),r3
+L2:tst	(r3)
+jeq	L3
+cmp	(r3),6.(r5)
+jlo	L5
+mov	2.(r3),r4
+add	6.(r5),2.(r3)
+sub	6.(r5),(r3)
+jne	L6
+L9:add	$04,r3
+mov	2.(r3),-2.(r3)
+L7:mov	(r3),-4.(r3)
+jne	L9
+L8:L6:mov	r4,r0
+jbr	L1
+L5:L4:add	$04,r3
+jbr	L2
+L3:clr	r0
+jbr	L1
+L1:jmp	rretrn
+.globl	_mfree
+.text
+_mfree:
+jsr	r5,rsave; 2
+mov	8.(r5),r2
+mov	4.(r5),r4
+L11:cmp	2.(r4),r2
+jhi	L12
+tst	(r4)
+jeq	L12
+L13:add	$04,r4
+jbr	L11
+L12:cmp	r4,4.(r5)
+jlos	L14
+mov	-2.(r4),r0
+add	-4.(r4),r0
+cmp	r2,r0
+jne	L14
+add	6.(r5),-4.(r4)
+mov	r2,r0
+add	6.(r5),r0
+cmp	2.(r4),r0
+jne	L15
+add	(r4),-4.(r4)
+L16:tst	(r4)
+jeq	L17
+add	$04,r4
+mov	2.(r4),-2.(r4)
+mov	(r4),-4.(r4)
+jbr	L16
+L17:L15:jbr	L18
+L14:mov	r2,r0
+add	6.(r5),r0
+cmp	2.(r4),r0
+jne	L19
+tst	(r4)
+jeq	L19
+sub	6.(r5),2.(r4)
+add	6.(r5),(r4)
+jbr	L20
+L19:tst	6.(r5)
+jeq	L21
+L24:mov	2.(r4),r3
+mov	r2,2.(r4)
+mov	r3,r2
+mov	(r4),r3
+mov	6.(r5),(r4)
+add	$04,r4
+L22:mov	r3,6.(r5)
+jne	L24
+L23:L21:L20:L18:L10:jmp	rretrn

@@ -1,64 +1,47 @@
-# Copyright 2026 Daniel McGuire
-# Licensed under the MIT license. 
+CC	= cc
+CFLAGS	= -std=gnu11 -O2 -Wall -Wno-unused-result
+SRC	= src
+BLD	= build
+BIN	= bin
 
-CC	?= cc
-CFLAGS	?= -std=c11 -O2 -Wall -Wextra -pedantic -I.
+PASS0	= $(SRC)/cc0.c $(SRC)/cc0t.c $(SRC)/ccrt.c
+TABLES	= $(BLD)/regtab.c $(BLD)/efftab.c $(BLD)/cctab.c $(BLD)/sptab.c
+PASS1	= $(SRC)/cc1.c $(SRC)/cc1t.c $(SRC)/ccrt.c $(TABLES)
 
-BUILD_DIR ?= build
-BIN_DIR	   = $(BUILD_DIR)/bin
-OBJ_DIR	   = $(BUILD_DIR)/obj
+all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11
+emulator: $(BIN)/pdp11
 
-PASS0_OBJS = $(addprefix $(OBJ_DIR)/, c00.o c01.o c02.o c03.o c0t.o ccmn.o)
-PASS1_OBJS = $(addprefix $(OBJ_DIR)/, c10.o c11.o c1t.o regtab.o efftab.o cctab.o sptab.o ccmn.o)
-CVOPT_OBJS = $(OBJ_DIR)/cvopt.o
-
-TARGETS	   = $(BIN_DIR)/c0 $(BIN_DIR)/c1 $(BIN_DIR)/cvopt
-
-all: $(TARGETS)
-
-c0: $(BIN_DIR)/c0
-c1: $(BIN_DIR)/c1
-cvopt: $(BIN_DIR)/cvopt
-
-$(BIN_DIR)/c0: $(PASS0_OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $(PASS0_OBJS)
-
-$(BIN_DIR)/c1: $(PASS1_OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $(PASS1_OBJS)
-
-$(BIN_DIR)/cvopt: $(CVOPT_OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $(CVOPT_OBJS)
-
-$(OBJ_DIR)/%tab.c: %tab.s $(BIN_DIR)/cvopt | $(OBJ_DIR)
-	$(BIN_DIR)/cvopt $< $@
-
-$(OBJ_DIR)/%tab.o: $(OBJ_DIR)/%tab.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-$(addprefix $(OBJ_DIR)/, c00.o c01.o c02.o c03.o c0t.o): c0.h cc.h
-$(addprefix $(OBJ_DIR)/, c10.o c11.o c1t.o regtab.o efftab.o cctab.o sptab.o): c1.h cc.h
-$(OBJ_DIR)/ccmn.o: cc.h
-
-$(BIN_DIR) $(OBJ_DIR):
+$(BIN) $(BLD):
 	mkdir -p $@
 
-check: all
-	@fail=0; for f in tests/src/*.c; do \
-	  n=$$(basename $$f .c); \
-	  BUILD_DIR=$(BUILD_DIR) ./cc11 $$f /tmp/$$n.$$$$.s || { echo "FAIL $$n (compile)"; fail=1; continue; }; \
-	  if cmp -s /tmp/$$n.$$$$.s tests/expected/$$n.s; then echo "ok   $$n"; \
-	  else echo "FAIL $$n (output differs)"; fail=1; fi; rm -f /tmp/$$n.$$$$.s; \
-	done; exit $$fail
+$(BIN)/cvopt: $(SRC)/cvopt.c | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $<
 
-baseline: all
-	for f in tests/src/*.c; do \
-	  BUILD_DIR=$(BUILD_DIR) ./cc11 $$f tests/expected/$$(basename $$f .c).s; \
-	done
+$(BLD)/%tab.c: tables/%tab.s $(BIN)/cvopt | $(BLD)
+	$(BIN)/cvopt $< $@
+
+$(BIN)/cc0: $(PASS0) $(SRC)/cc0.h $(SRC)/ccw.h | $(BIN)
+	$(CC) $(CFLAGS) -I$(SRC) -o $@ $(PASS0) -lm
+
+$(BIN)/cc1: $(PASS1) $(SRC)/cc1.h $(SRC)/ccw.h | $(BIN)
+	$(CC) $(CFLAGS) -I$(SRC) -o $@ $(PASS1) -lm
+
+$(BIN)/cc11: $(SRC)/cc11.c | $(BIN)
+	$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
+
+$(BIN)/pdp11: tools/pdp11.c | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $< -lm
+
+check: all
+	@fail=0; t=$$(mktemp -d); \
+	for f in tests/src/*.c; do n=$$(basename $$f .c); \
+	  cp $$f $$t/$$n.c; \
+	  (cd $$t && $(CURDIR)/$(BIN)/cc11 -S $$n.c >/dev/null 2>&1); \
+	  if cmp -s $$t/$$n.s tests/expected/$$n.s; then echo "ok   $$n"; \
+	  else echo "FAIL $$n"; fail=1; fi; \
+	done; rm -rf $$t; exit $$fail
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BIN) $(BLD)
 
-.PHONY: all clean check baseline c0 c1 cvopt
+.PHONY: all emulator check clean
