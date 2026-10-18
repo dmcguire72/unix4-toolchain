@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <limits.h>
+#include <string.h>
 
 #include "options.h"
 #include "filesystem.h"
@@ -37,16 +38,25 @@ int main(int argc, char **argv)
     if (setup_working_directory(guest_chdir) != 0)
         return 2;
 
-    if (load_program(initial_prog, argc - arg_index,
-                     argv + arg_index) != 0) {
+    int load_res = load_program(initial_prog, argc - arg_index, argv + arg_index);
+    
+    if (load_res == 0) {
+        if (trace & TR_SYS)
+            tr_line("--- loaded %s (argc=%d) ---", initial_prog, argc - arg_index);
+        run_program();
+    } else if (load_res == -2) {
+        if (trace & TR_SYS)
+            tr_line("v4linux: %s is not a PDP-11 binary, handing off to host", initial_prog);
+        
+        char **host_argv = &argv[arg_index];
+        
+        int err = exec_host_program(initial_prog, host_argv);
+        fprintf(stderr, "v4linux: host execution failed: %s\n", strerror(err));
+        return 2;
+    } else {
         fprintf(stderr, "v4linux: cannot load %s\n", initial_prog);
         return 2;
     }
-
-    if (trace & TR_SYS)
-        tr_line("--- loaded %s (argc=%d) ---", initial_prog, argc - arg_index);
-
-    run_program();
-
+    
     return 0;
 }

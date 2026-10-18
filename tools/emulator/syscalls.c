@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <limits.h>
 #include <termios.h>
+#include <libgen.h>
 
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -438,6 +439,16 @@ static void sys_nosys(void)
 	trap_sig(V4_SIGSYS);
 }
 
+int exec_host_program(const char *path, char **argv)
+{
+    if (strchr(path, '/') != NULL)
+        execv(path, argv);
+    else
+       execvp(path, argv);
+    
+    return errno;
+}
+
 static void do_sys(int n, uint16_t *a)
 {
 	int i;
@@ -601,34 +612,97 @@ static void do_sys(int n, uint16_t *a)
 		return;
 	}
 	case 11: { /* exec */
-		char *av[260];
+		char *av[260] = {0};
 		static char strs[640];
 		int na = 0, nc = 0;
 		uint16_t ap = a[1], s;
+		char original_guest_path[PATH_MAX];
 
-		mappath(a[0], p);
+		rawpath(a[0], original_guest_path);
+		
 		while ((s = rdw(ap)) != 0) {
 			if (s == 0177777) { seterr(14); return; }
 			av[na++] = strs + nc;
 			for (;;) {
 				char c = mem[s++];
-
 				if (nc > 510) { seterr(7); return; }
 				strs[nc++] = c;
 				if (!c) break;
 			}
 			ap += 2;
-			if (na >= 255) { seterr(7); return; }
+			if (na >= 259) { seterr(7); return; }
 		}
+
 		if (stop_at_exec) {
-			printf("EXEC %s", p);
+			printf("EXEC %s", original_guest_path);
 			for (i = 0; i < na; i++) printf(" %s", av[i]);
 			printf("\n");
 			fflush(stdout);
 			exit(0);
 		}
-		if (load_image(p, na, av) < 0) seterr(load_errno);
-		else tnote("image replaced; signals reset, FP state cleared");
+
+		char mapped_p[PATH_MAX * 2];
+		mappath(a[0], mapped_p);
+		if (load_image(mapped_p, na, av) == 0) {
+			tnote("image replaced; signals reset, FP state cleared");
+			return;
+		}
+
+		if (load_errno == 8 || load_errno == 2) {
+			if (root[0] != '\0' && strchr(original_guest_path, '/') == NULL) {
+				static const char *gdirs[] = { "/bin/", "/usr/bin/" };
+				const char *rt = strcmp(root, "/") == 0 ? "" : root;
+				char cand[PATH_MAX * 2];
+				int k;
+
+				for (k = 0; k < 2; k++) {
+					snprintf(cand, sizeof cand, "%s%s%s", rt, gdirs[k], original_guest_path);
+					if (load_image(cand, na, av) == 0) {
+						tnote("bare name resolved to guest %s%s", gdirs[k], original_guest_path);
+						return;
+					}
+				}
+			}
+
+			if (trace & TR_SYS)
+				tr_line("exec: %s not a V4 binary, handing to host", original_guest_path);
+			
+			char cwd[PATH_MAX];
+			if (getcwd(cwd, sizeof cwd) != NULL) {
+				char *real_cwd = cwd;
+				if (strncmp(cwd, "/run/pdp11-v4/host", 18) == 0) {
+					real_cwd = cwd + 18;
+				} else if (strncmp(cwd, "/var/run/pdp11-v4/host", 22) == 0) {
+					real_cwd = cwd + 22;
+				}
+				if (real_cwd != cwd) {
+					chdir(real_cwd);
+				}
+			}
+
+			if (strncmp(original_guest_path, "/host", 5) == 0) {
+				const char *direct_path = original_guest_path + 5;
+				if (*direct_path == '\0') direct_path = "/";
+				
+				if (na > 0) av[0] = (char *)direct_path;
+				else { av[0] = (char *)direct_path; na = 1; }
+				
+				execv(direct_path, av);
+			} 
+			else if (strchr(original_guest_path, '/') == NULL) {
+				if (na == 0) { av[0] = original_guest_path; na = 1; }
+				execvp(original_guest_path, av);
+			} 
+			else {
+				if (na == 0) { av[0] = mapped_p; na = 1; }
+				else { av[0] = mapped_p; }
+				execv(mapped_p, av);
+			}
+			
+			seterr(v4errno(errno));
+			return;
+		}
+		seterr(load_errno);
 		return;
 	}
 	case 12: { /* chdir */

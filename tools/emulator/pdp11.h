@@ -70,6 +70,7 @@ void set_ps_cc(uint16_t ps);
 
 extern int load_errno;
 int load_image(const char *path, int argc, char **argv);
+int exec_host_program(const char *path, char **argv);
 void v4sys(int n);
 void syscalls_init(void);
 void fstep(uint16_t ir);
