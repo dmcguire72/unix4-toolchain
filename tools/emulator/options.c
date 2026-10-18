@@ -21,8 +21,20 @@ int parse_args(int argc, char **argv, int *arg_index,
             stop_at_exec = 1;
             ai++;
         } else if (!strcmp(argv[ai], "-t")) {
-            trace = 1;
+            trace |= TR_CPU;
             ai++;
+        } else if (!strcmp(argv[ai], "-s")) {
+            trace |= TR_SYS;
+            ai++;
+        } else if (!strcmp(argv[ai], "-F")) {
+            trace |= TR_FPU;
+            ai++;
+        } else if (!strcmp(argv[ai], "-T")) {
+            trace |= TR_CPU | TR_FPU | TR_SYS;
+            ai++;
+        } else if (!strcmp(argv[ai], "-o") && ai + 1 < argc) {
+            trace_open(argv[ai + 1]);
+            ai += 2;
         } else {
             break;
         }
@@ -30,7 +42,11 @@ int parse_args(int argc, char **argv, int *arg_index,
 
     if (ai >= argc) {
         fprintf(stderr,
-                "usage: pdp11 [-r root] [--chdir dir] [-x] prog args...\n");
+                "usage: v4linux [-r root] [--chdir dir] [-x] [-s] [-t] [-F] [-T] [-o file]\n"
+                "              prog args...\n"
+                "  -s  trace guest system calls (strace style)\n"
+                "  -t  trace every instruction     -F  trace FP instructions\n"
+                "  -T  all traces                  -o  write trace to file\n");
         return 2;
     }
 

@@ -1,35 +1,35 @@
 #include "pdp11.h"
 
-static void setcc_add(uint32_t s, uint32_t d, uint32_t r, int byte)
+static unsigned long prof_tick;
+
+static void branch(int cond, uint16_t ir)
 {
-	uint32_t m = byte ? 0x80 : 0x8000, mask = byte ? 0xff : 0xffff;
-	r &= 0x1ffff;
-	(void)mask;
-	fV = ((s & m) == (d & m)) && ((r & m) != (s & m));
-	fC = (r >> (byte ? 8 : 16)) & 1;
+	if (cond) PC += 2 * (int8_t)ir;
 }
 
-static void branch(int cond, int off)
+static void push(uint16_t v)
 {
-	if (cond) PC += 2 * (int8_t)off;
+	SP -= 2;
+	wrw(SP, v);
 }
 
-void step(void)
+static uint16_t pop(void)
 {
-	uint16_t ir = rdw(PC), s, d, r;
-	int sm, sr, dm, dr, op, byte;
-	uint16_t at = PC;
-	(void)at;
-	PC += 2;
-	op = ir >> 12;
-	byte = (ir >> 15) & 1;
-	sm = (ir >> 9) & 7;
-	sr = (ir >> 6) & 7;
-	dm = (ir >> 3) & 7;
-	dr = ir & 7;
+	uint16_t v = rdw(SP);
 
-	switch (op & 7) {
-	case 1: /* MOV / MOVB */
+	SP += 2;
+	return v;
+}
+
+static void double_op(uint16_t ir, int opc, int byte)
+{
+	int sm = (ir >> 9) & 7, sr = (ir >> 6) & 7;
+	int dm = (ir >> 3) & 7, dr = ir & 7;
+	uint16_t s, d, r;
+	uint16_t sign = byte ? 0x80 : 0x8000;
+
+	switch (opc) {
+	case 1:	/* MOV / MOVB */
 		getop(sm, sr, byte);
 		s = load(byte);
 		getop(dm, dr, byte);
@@ -37,20 +37,17 @@ void step(void)
 		fV = 0;
 		if (byte) storeb_sext(s); else store(s, 0);
 		return;
-	case 2: /* CMP */
+	case 2:	/* CMP / CMPB: src - dst */
 		getop(sm, sr, byte);
 		s = load(byte);
 		getop(dm, dr, byte);
 		d = load(byte);
 		r = s - d;
 		nz(r, byte);
-		{
-			uint32_t m = byte ? 0x80 : 0x8000;
-			fV = ((s & m) != (d & m)) && ((r & m) == (d & m));
-			fC = byte ? ((s & 0xff) < (d & 0xff)) : (s < d);
-		}
+		fV = ((s ^ d) & (s ^ r) & sign) != 0;
+		fC = byte ? (s & 0xff) < (d & 0xff) : s < d;
 		return;
-	case 3: /* BIT */
+	case 3:	/* BIT / BITB */
 		getop(sm, sr, byte);
 		s = load(byte);
 		getop(dm, dr, byte);
@@ -58,7 +55,7 @@ void step(void)
 		nz(s & d, byte);
 		fV = 0;
 		return;
-	case 4: /* BIC */
+	case 4:	/* BIC / BICB */
 		getop(sm, sr, byte);
 		s = load(byte);
 		getop(dm, dr, byte);
@@ -68,7 +65,7 @@ void step(void)
 		fV = 0;
 		store(r, byte);
 		return;
-	case 5: /* BIS */
+	case 5:	/* BIS / BISB */
 		getop(sm, sr, byte);
 		s = load(byte);
 		getop(dm, dr, byte);
@@ -78,261 +75,439 @@ void step(void)
 		fV = 0;
 		store(r, byte);
 		return;
-	case 6: /* ADD / SUB */
+	case 6:	/* ADD (word) / SUB (byte flag set) */
 		getop(sm, sr, 0);
 		s = load(0);
 		getop(dm, dr, 0);
 		d = load(0);
 		if (!byte) {
 			uint32_t t = (uint32_t)s + d;
+
 			r = t;
-			nz(r, 0);
-			setcc_add(s, d, t, 0);
+			fV = (~(s ^ d) & (s ^ r) & 0x8000) != 0;
+			fC = (t >> 16) & 1;
 		} else {
 			r = d - s;
-			nz(r, 0);
-			fV = ((s & 0x8000) != (d & 0x8000)) && ((r & 0x8000) == (s & 0x8000));
+			fV = ((s ^ d) & (d ^ r) & 0x8000) != 0;
 			fC = d < s;
 		}
+		nz(r, 0);
 		store(r, 0);
 		return;
 	}
+}
 
-	/* op & 7 == 0 or 7 */
-	if (op == 7) { /* EIS */
-		int rg = (ir >> 6) & 7;
-		switch ((ir >> 9) & 7) {
-		case 0: { /* MUL */
-			int32_t a, res;
-			getop(dm, dr, 0);
-			s = load(0);
-			a = (int16_t)R[rg];
-			res = a * (int16_t)s;
-			if (rg & 1) R[rg] = res;
-			else { R[rg] = res >> 16; R[rg | 1] = res; }
-			fN = res < 0;
-			fZ = res == 0;
-			fV = 0;
-			fC = res < -32768 || res > 32767;
-			return;
-		}
-		case 1: { /* DIV */
-			int32_t dv, q, rm;
-			int16_t sv;
-			getop(dm, dr, 0);
-			sv = load(0);
-			if (sv == 0) { fV = fC = 1; return; }
-			dv = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]);
-			q = dv / sv;
-			rm = dv % sv;
-			if (q > 32767 || q < -32768) { fV = 1; fC = 0; return; }
-			R[rg] = q;
-			R[rg | 1] = rm;
-			fN = q < 0;
-			fZ = q == 0;
-			fV = 0;
-			fC = 0;
-			return;
-		}
-		case 2: { /* ASH */
-			int n_;
-			int16_t v = R[rg];
-			int32_t res;
-			getop(dm, dr, 0);
-			n_ = load(0) & 077;
-			if (n_ & 040) n_ -= 64;
-			fV = 0;
-			fC = 0;
-			if (n_ > 0) {
-				int32_t t = v;
-				int k;
-				for (k = 0; k < n_; k++) { fC = (t >> 15) & 1; t = (int16_t)(t << 1); }
-				res = t;
-				fV = ((int16_t)res < 0) != (v < 0);
-			} else if (n_ < 0) {
-				int32_t t = v;
-				int k;
-				for (k = 0; k < -n_; k++) { fC = t & 1; t >>= 1; }
-				res = t;
-			} else {
-				res = v;
-			}
-			R[rg] = res;
-			nz(R[rg], 0);
-			return;
-		}
-		case 3: { /* ASHC */
-			int n_;
-			int32_t v = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]);
-			getop(dm, dr, 0);
-			n_ = load(0) & 077;
-			if (n_ & 040) n_ -= 64;
-			fV = 0;
-			fC = 0;
-			if (n_ > 0) {
-				int k;
-				int32_t t = v;
-				for (k = 0; k < n_; k++) { fC = (t >> 31) & 1; t = (int32_t)((uint32_t)t << 1); }
-				fV = (t < 0) != (v < 0);
-				v = t;
-			} else if (n_ < 0) {
-				int k;
-				for (k = 0; k < -n_; k++) { fC = v & 1; v >>= 1; }
-			}
-			R[rg] = (uint32_t)v >> 16;
-			R[rg | 1] = v;
-			fN = v < 0;
-			fZ = v == 0;
-			return;
-		}
-		case 4: /* XOR */
-			getop(dm, dr, 0);
-			d = load(0);
-			r = d ^ R[rg];
-			nz(r, 0);
-			fV = 0;
-			store(r, 0);
-			return;
-		case 7: /* SOB */
-			if (--R[rg] != 0) PC -= 2 * (ir & 077);
-			return;
-		}
-		die("bad EIS instruction");
-	}
+static void eis_op(uint16_t ir)
+{
+	int rg = (ir >> 6) & 7, dm = (ir >> 3) & 7, dr = ir & 7;
+	uint16_t s, d, r;
 
-	if ((ir & 0170000) == 0170000) { fstep(ir); return; }
+	switch ((ir >> 9) & 7) {
+	case 0: { /* MUL */
+		int32_t res;
 
-	/* op == 0 or 8 (byte forms of single-operand/branch/trap) */
-	if (!byte) {
-		switch (ir >> 6) {
-		case 0:
-			if (ir == 0) die("HALT");
-			if (ir == 5 || ir == 6 || ir == 1 || ir == 2 || ir == 3 || ir == 4)
-				die("unsupported privileged instruction");
-			break;
-		case 1: /* JMP */
-			getop(dm, dr, 0);
-			if (regdst >= 0) die("JMP to register");
-			PC = ea;
-			return;
-		case 2:
-			if ((ir & 070) == 0) { /* RTS */
-				PC = R[dr];
-				R[dr] = rdw(SP);
-				SP += 2;
-				return;
-			}
-			if ((ir & 0177760) == 0000240 || (ir & 0177760) == 0000260) { /* CCC/SCC */
-				int set = ir & 020;
-				if (ir & 1) fC = set != 0;
-				if (ir & 2) fV = set != 0;
-				if (ir & 4) fZ = set != 0;
-				if (ir & 010) fN = set != 0;
-				return;
-			}
-			break;
-		case 3: /* SWAB */
-			getop(dm, dr, 0);
-			d = load(0);
-			r = d >> 8 | d << 8;
-			store(r, 0);
-			fN = (r & 0x80) != 0;
-			fZ = (r & 0xff) == 0;
-			fV = fC = 0;
-			return;
-		}
-	}
-
-	if (!byte && (ir >> 8) >= 001 && (ir >> 8) <= 003) { /* BR..BLE handled below via branch table */ }
-	{
-		int hi = (ir >> 8) & 0377;
-		/* branches: 0004xx-0003xx and 1000xx-1034xx */
-		switch (ir & 0177400) {
-		case 0000400: branch(1, ir); return;
-		case 0001000: branch(!fZ, ir); return;
-		case 0001400: branch(fZ, ir); return;
-		case 0002000: branch(!(fN ^ fV), ir); return;
-		case 0002400: branch(fN ^ fV, ir); return;
-		case 0003000: branch(!(fZ | (fN ^ fV)), ir); return;
-		case 0003400: branch(fZ | (fN ^ fV), ir); return;
-		case 0100000: branch(!fN, ir); return;
-		case 0100400: branch(fN, ir); return;
-		case 0101000: branch(!(fC | fZ), ir); return;
-		case 0101400: branch(fC | fZ, ir); return;
-		case 0102000: branch(!fV, ir); return;
-		case 0102400: branch(fV, ir); return;
-		case 0103000: branch(!fC, ir); return;
-		case 0103400: branch(fC, ir); return;
-		case 0104400: v4sys(ir & 0377); return; /* TRAP */
-		}
-		(void)hi;
-	}
-
-	if (!byte && (ir & 0177000) == 0004000) { /* JSR */
-		int rg = (ir >> 6) & 7;
 		getop(dm, dr, 0);
-		if (regdst >= 0) die("JSR to register");
-		d = ea;
-		SP -= 2;
-		wrw(SP, R[rg]);
-		R[rg] = PC;
-		PC = d;
+		s = load(0);
+		res = (int32_t)(int16_t)R[rg] * (int16_t)s;
+		if (rg & 1) R[rg] = res;
+		else { R[rg] = res >> 16; R[rg | 1] = res; }
+		fN = res < 0;
+		fZ = res == 0;
+		fV = 0;
+		fC = res < -32768 || res > 32767;
+		return;
+	}
+	case 1: { /* DIV */
+		int64_t dv, q;
+		int16_t sv;
+
+		getop(dm, dr, 0);
+		sv = load(0);
+		if (sv == 0) {		/* divide by zero */
+			fN = 0; fZ = 0; fV = 1; fC = 1;
+			return;
+		}
+		dv = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]);
+		q = dv / sv;
+		if (q > 32767 || q < -32768) {	/* overflow */
+			fV = 1; fC = 0;
+			fN = dv < 0;
+			fZ = 0;
+			return;
+		}
+		R[rg] = (uint16_t)q;
+		R[rg | 1] = (uint16_t)(dv % sv);
+		fN = q < 0;
+		fZ = q == 0;
+		fV = 0;
+		fC = 0;
+		return;
+	}
+	case 2: { /* ASH */
+		int n, k;
+		int16_t v = R[rg], cur;
+
+		getop(dm, dr, 0);
+		n = load(0) & 077;
+		if (n & 040) n -= 64;
+		fV = fC = 0;
+		cur = v;
+		if (n > 0) {
+			for (k = 0; k < n; k++) {
+				fC = ((uint16_t)cur >> 15) & 1;
+				cur = (int16_t)((uint16_t)cur << 1);
+				if ((cur < 0) != (v < 0)) fV = 1;
+			}
+		} else if (n < 0) {
+			for (k = 0; k < -n; k++) {
+				fC = cur & 1;
+				cur >>= 1;
+			}
+		}
+		R[rg] = (uint16_t)cur;
+		nz(R[rg], 0);
+		return;
+	}
+	case 3: { /* ASHC */
+		int n, k;
+		int32_t v = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]), cur;
+
+		getop(dm, dr, 0);
+		n = load(0) & 077;
+		if (n & 040) n -= 64;
+		fV = fC = 0;
+		cur = v;
+		if (n > 0) {
+			for (k = 0; k < n; k++) {
+				fC = ((uint32_t)cur >> 31) & 1;
+				cur = (int32_t)((uint32_t)cur << 1);
+				if ((cur < 0) != (v < 0)) fV = 1;
+			}
+		} else if (n < 0) {
+			for (k = 0; k < -n; k++) {
+				fC = cur & 1;
+				cur >>= 1;
+			}
+		}
+		R[rg] = (uint32_t)cur >> 16;
+		R[rg | 1] = (uint16_t)cur;
+		fN = cur < 0;
+		fZ = cur == 0;
+		return;
+	}
+	case 4: /* XOR */
+		getop(dm, dr, 0);
+		d = load(0);
+		r = d ^ R[rg];
+		nz(r, 0);
+		fV = 0;
+		store(r, 0);
+		return;
+	case 7: /* SOB */
+		if (--R[rg] != 0) PC -= 2 * (ir & 077);
+		return;
+	}
+	/* 075xxx FIS and 076xxx CIS are not present on this CPU */
+	trap_sig(V4_SIGINS);
+}
+
+static void single_op(uint16_t ir, int byte)
+{
+	int dm = (ir >> 3) & 7, dr = ir & 7;
+	uint16_t m = byte ? 0xff : 0xffff;
+	uint16_t sb = byte ? 0x80 : 0x8000;
+	uint16_t v;
+	int c, nc;
+
+	switch ((ir >> 6) & 077) {
+	case 050: /* CLR */
+		getop(dm, dr, byte);
+		store(0, byte);
+		fN = 0; fZ = 1; fV = fC = 0;
+		return;
+	case 051: /* COM */
+		getop(dm, dr, byte);
+		v = ~load(byte);
+		store(v, byte);
+		nz(v, byte);
+		fV = 0; fC = 1;
+		return;
+	case 052: /* INC */
+		getop(dm, dr, byte);
+		v = load(byte);
+		fV = (v & m) == (sb - 1);
+		v++;
+		store(v, byte);
+		nz(v, byte);
+		return;
+	case 053: /* DEC */
+		getop(dm, dr, byte);
+		v = load(byte);
+		fV = (v & m) == sb;
+		v--;
+		store(v, byte);
+		nz(v, byte);
+		return;
+	case 054: /* NEG */
+		getop(dm, dr, byte);
+		v = load(byte);
+		fV = (v & m) == sb;
+		v = -v;
+		store(v, byte);
+		nz(v, byte);
+		fC = (v & m) != 0;
+		return;
+	case 055: /* ADC */
+		getop(dm, dr, byte);
+		v = load(byte);
+		c = fC;
+		fV = c && (v & m) == (sb - 1);
+		fC = c && (v & m) == m;
+		v += c;
+		store(v, byte);
+		nz(v, byte);
+		return;
+	case 056: /* SBC */
+		getop(dm, dr, byte);
+		v = load(byte);
+		c = fC;
+		fV = c && (v & m) == sb;
+		fC = c && (v & m) == 0;
+		v -= c;
+		store(v, byte);
+		nz(v, byte);
+		return;
+	case 057: /* TST */
+		getop(dm, dr, byte);
+		v = load(byte);
+		nz(v, byte);
+		fV = fC = 0;
+		return;
+	case 060: /* ROR */
+		getop(dm, dr, byte);
+		v = load(byte);
+		nc = v & 1;
+		v = (v & m) >> 1;
+		if (fC) v |= sb;
+		store(v, byte);
+		nz(v, byte);
+		fC = nc;
+		fV = fN ^ fC;
+		return;
+	case 061: /* ROL */
+		getop(dm, dr, byte);
+		v = load(byte);
+		nc = (v & sb) != 0;
+		v = v << 1;
+		if (fC) v |= 1;
+		store(v, byte);
+		nz(v, byte);
+		fC = nc;
+		fV = fN ^ fC;
+		return;
+	case 062: /* ASR */
+		getop(dm, dr, byte);
+		v = load(byte);
+		nc = v & 1;
+		v = ((v & m) >> 1) | (v & sb);
+		store(v, byte);
+		nz(v, byte);
+		fC = nc;
+		fV = fN ^ fC;
+		return;
+	case 063: /* ASL */
+		getop(dm, dr, byte);
+		v = load(byte);
+		nc = (v & sb) != 0;
+		v = v << 1;
+		store(v, byte);
+		nz(v, byte);
+		fC = nc;
+		fV = fN ^ fC;
+		return;
+	case 064:
+		if (!byte) { /* MARK nn */
+			SP = PC + 2 * (ir & 077);
+			PC = R[5];
+			R[5] = pop();
+			return;
+		}
+		/* MTPS */
+		getop(dm, dr, 1);
+		set_ps_cc(load(1));
+		return;
+	case 065: /* MFPI / MFPD */
+		if (byte) break;
+		getop(dm, dr, 0);
+		v = load(0);
+		push(v);
+		nz(v, 0);
+		fV = 0;
+		return;
+	case 066: /* MTPI / MTPD */
+		if (byte) break;
+		v = pop();
+		getop(dm, dr, 0);
+		store(v, 0);
+		nz(v, 0);
+		fV = 0;
+		return;
+	case 067:
+		if (!byte) { /* SXT */
+			getop(dm, dr, 0);
+			store(fN ? 0xffff : 0, 0);
+			fZ = !fN;
+			fV = 0;
+			return;
+		}
+		/* MFPS */
+		getop(dm, dr, 1);
+		v = fN << 3 | fZ << 2 | fV << 1 | fC;
+		if (regdst >= 0) R[regdst] = (uint16_t)(int16_t)(int8_t)v;
+		else mem[ea] = v;
+		nz(v, 1);
+		fV = 0;
+		return;
+	}
+	trap_sig(V4_SIGINS);
+}
+
+static void misc_op(uint16_t ir)
+{
+	int dm = (ir >> 3) & 7, dr = ir & 7;
+	uint16_t t;
+
+	switch (ir >> 6) {
+	case 0:
+		switch (ir) {
+		case 0000000:	/* HALT */
+			trap_sig(V4_SIGBUS);
+		case 0000001:	/* WAIT */
+		case 0000005:	/* RESET */
+			return;
+		case 0000002:	/* RTI */
+		case 0000006:	/* RTT */
+			t = pop();
+			{
+				uint16_t ps = pop();
+
+				PC = t;
+				set_ps_cc(ps);
+			}
+			return;
+		case 0000003:	/* BPT */
+			trap_sig(V4_SIGTRC);
+		case 0000004:	/* IOT */
+			trap_sig(V4_SIGIOT);
+		}
+		trap_sig(V4_SIGINS);	/* MFPT + unused */
+	case 1:	/* JMP */
+		getop(dm, dr, 0);
+		if (regdst >= 0) trap_sig(V4_SIGBUS);
+		PC = ea;
+		return;
+	case 2:
+		if ((ir & 070) == 0) {	/* RTS */
+			PC = R[dr];
+			R[dr] = pop();
+			return;
+		}
+		if ((ir & 0177770) == 0000230)	/* SPL */
+			return;
+		if ((ir & 0177740) == 0000240) {	/* CCC/SCC/NOP */
+			int set = ir & 020;
+
+			if (ir & 1) fC = set != 0;
+			if (ir & 2) fV = set != 0;
+			if (ir & 4) fZ = set != 0;
+			if (ir & 010) fN = set != 0;
+			return;
+		}
+		break;
+	case 3:	/* SWAB */
+		getop(dm, dr, 0);
+		t = load(0);
+		t = t >> 8 | t << 8;
+		store(t, 0);
+		fN = (t & 0x80) != 0;
+		fZ = (t & 0xff) == 0;
+		fV = fC = 0;
+		return;
+	}
+	trap_sig(V4_SIGINS);
+}
+
+void step(void)
+{
+	uint16_t ir;
+	int opc, byte;
+
+	if (sig_pending) check_signals();
+	if (prof_scale && ++prof_tick >= 8192) {
+		prof_tick = 0;
+		prof_sample();
+	}
+	if (trace & TR_CPU)
+		trace_cpu();
+
+	ir = rdw(PC);
+	PC += 2;
+	opc = ir >> 12;
+	byte = (ir >> 15) & 1;
+
+	switch (opc & 7) {
+	case 1: case 2: case 3: case 4: case 5: case 6:
+		double_op(ir, opc & 7, byte);
+		return;
+	case 7:
+		if (opc == 7) { eis_op(ir); return; }
+		fstep(ir);		/* 17xxxx: fp */
 		return;
 	}
 
-	/* single operand group (byte flag selects b forms): 0050xx-0063xx, 0067xx */
-	{
-		int sub = (ir >> 6) & 077;
-		uint16_t v;
-		int c;
-		switch (sub) {
-		case 050:
-			getop(dm, dr, byte); store(0, byte); fN = 0; fZ = 1; fV = fC = 0; return;
-		case 051:
-			getop(dm, dr, byte); v = load(byte); v = ~v; store(v, byte); nz(v, byte); fV = 0; fC = 1; return;
-		case 052:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t m = byte ? 0x7f : 0x7fff; fV = (v & (byte ? 0xff : 0xffff)) == m; }
-			v++; store(v, byte); nz(v, byte); return;
-		case 053:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t m = byte ? 0x80 : 0x8000; fV = (v & (byte ? 0xff : 0xffff)) == m; }
-			v--; store(v, byte); nz(v, byte); return;
-		case 054:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t m = byte ? 0x80 : 0x8000; fV = (v & (byte ? 0xff : 0xffff)) == m; }
-			v = -v; store(v, byte); nz(v, byte); fC = (v & (byte ? 0xff : 0xffff)) != 0; return;
-		case 055:
-			getop(dm, dr, byte); v = load(byte); c = fC;
-			{ uint16_t m = byte ? 0x7f : 0x7fff; fV = c && (v & (byte ? 0xff : 0xffff)) == m; fC = c && ((v & (byte ? 0xff : 0xffff)) == (byte ? 0xff : 0xffff)); }
-			v += c; store(v, byte); nz(v, byte); return;
-		case 056:
-			getop(dm, dr, byte); v = load(byte); c = fC;
-			{ uint16_t m = byte ? 0x80 : 0x8000; fV = (v & (byte ? 0xff : 0xffff)) == m; fC = (v & (byte ? 0xff : 0xffff)) == 0 && c; }
-			v -= c; store(v, byte); nz(v, byte); return;
-		case 057:
-			getop(dm, dr, byte); v = load(byte); nz(v, byte); fV = fC = 0; return;
-		case 060:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t sb = byte ? 0x80 : 0x8000; int nc = v & 1; v = (v & (byte ? 0xff : 0xffff)) >> 1; if (fC) v |= sb;
-			  store(v, byte); nz(v, byte); fC = nc; fV = fN ^ fC; } return;
-		case 061:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t sb = byte ? 0x80 : 0x8000; int nc = (v & sb) != 0; v = v << 1; if (fC) v |= 1;
-			  store(v, byte); nz(v, byte); fC = nc; fV = fN ^ fC; } return;
-		case 062:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t sb = byte ? 0x80 : 0x8000; int nc = v & 1; v = (v & (byte ? 0xff : 0xffff)) >> 1 | (v & sb);
-			  store(v, byte); nz(v, byte); fC = nc; fV = fN ^ fC; } return;
-		case 063:
-			getop(dm, dr, byte); v = load(byte);
-			{ uint16_t sb = byte ? 0x80 : 0x8000; int nc = (v & sb) != 0; v = v << 1;
-			  store(v, byte); nz(v, byte); fC = nc; fV = fN ^ fC; } return;
-		case 067:
-			if (!byte) { /* SXT */
-				getop(dm, dr, 0); store(fN ? 0xffff : 0, 0); fZ = !fN; fV = 0; return;
+	if (!byte) {
+		if (ir < 0000400 || (ir >= 0000400 && ir < 0004000)) {
+			if (ir >= 0000400) {
+				switch (ir & 0177400) {
+				case 0000400: branch(1, ir); return;
+				case 0001000: branch(!fZ, ir); return;
+				case 0001400: branch(fZ, ir); return;
+				case 0002000: branch(!(fN ^ fV), ir); return;
+				case 0002400: branch(fN ^ fV, ir); return;
+				case 0003000: branch(!(fZ | (fN ^ fV)), ir); return;
+				case 0003400: branch(fZ | (fN ^ fV), ir); return;
+				}
 			}
+			misc_op(ir);
+			return;
 		}
+		if ((ir & 0177000) == 0004000) {	/* JSR */
+			int rg = (ir >> 6) & 7;
+			uint16_t t;
+
+			getop((ir >> 3) & 7, ir & 7, 0);
+			if (regdst >= 0) trap_sig(V4_SIGBUS);
+			t = ea;
+			push(R[rg]);
+			R[rg] = PC;
+			PC = t;
+			return;
+		}
+		single_op(ir, 0);
+		return;
 	}
-	die("illegal instruction");
+
+	switch (ir & 0177400) {
+	case 0100000: branch(!fN, ir); return;		/* BPL  */
+	case 0100400: branch(fN, ir); return;			/* BMI  */
+	case 0101000: branch(!(fC | fZ), ir); return;	/* BHI  */
+	case 0101400: branch(fC | fZ, ir); return;	/* BLOS */
+	case 0102000: branch(!fV, ir); return;		/* BVC  */
+	case 0102400: branch(fV, ir); return;			/* BVS  */
+	case 0103000: branch(!fC, ir); return;		/* BCC  */
+	case 0103400: branch(fC, ir); return;			/* BCS  */
+	case 0104000: trap_sig(V4_SIGEMT);			/* EMT  */
+	case 0104400: v4sys(ir & 077); return;			/* TRAP */
+	}
+	single_op(ir, 1);
 }

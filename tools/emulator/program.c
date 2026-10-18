@@ -15,7 +15,7 @@ int resolve_root(char *abs_root, size_t size)
         return 0;
 
     if (realpath(root, abs_root) == NULL) {
-        perror("pdp11: invalid root directory");
+        perror("v4linux: invalid root directory");
         return 2;
     }
 

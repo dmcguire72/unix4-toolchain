@@ -1,25 +1,26 @@
 #include "pdp11.h"
 
 #include <stdlib.h>
+#include <stdarg.h>
 
 int regdst;
 uint16_t ea;
 
 void die(const char *m, ...)
 {
-	fprintf(stderr, "pdp11: %s (pc=%06o)\n", m, PC);
+	fprintf(stderr, "v4linux: %s (pc=%06o)\n", m, PC);
 	exit(99);
 }
 
 uint16_t rdw(uint16_t a)
 {
-	if (a & 1) die("odd address read");
+	if (a & 1) trap_sig(V4_SIGBUS);
 	return mem[a] | mem[a + 1] << 8;
 }
 
 void wrw(uint16_t a, uint16_t v)
 {
-	if (a & 1) die("odd address write");
+	if (a & 1) trap_sig(V4_SIGBUS);
 	mem[a] = v;
 	mem[a + 1] = v >> 8;
 }
@@ -67,7 +68,7 @@ void store(uint16_t v, int byte)
 
 void storeb_sext(uint16_t v)
 {
-	if (regdst >= 0) R[regdst] = (int8_t)v;
+	if (regdst >= 0) R[regdst] = (uint16_t)(int16_t)(int8_t)v;
 	else mem[ea] = v;
 }
 
@@ -80,4 +81,17 @@ void nz(uint16_t v, int byte)
 		fN = (v & 0100000) != 0;
 		fZ = v == 0;
 	}
+}
+
+uint16_t get_ps(void)
+{
+	return 0170000 | fN << 3 | fZ << 2 | fV << 1 | fC;
+}
+
+void set_ps_cc(uint16_t ps)
+{
+	fC = ps & 1;
+	fV = (ps >> 1) & 1;
+	fZ = (ps >> 2) & 1;
+	fN = (ps >> 3) & 1;
 }

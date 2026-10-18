@@ -20,7 +20,7 @@ void init_fdtab(void)
 int setup_working_directory(const char *guest_chdir)
 {
     if (root[0] != '\0' && chdir(root) < 0) {
-        perror("pdp11: cannot enter root directory");
+        perror("v4linux: cannot enter root directory");
         return 2;
     }
 
@@ -41,7 +41,7 @@ int setup_working_directory(const char *guest_chdir)
         }
 
         if (chdir(target_cwd) < 0) {
-            perror("pdp11: cannot chdir to requested directory");
+            perror("v4linux: cannot chdir to requested directory");
             return 2;
         }
     }

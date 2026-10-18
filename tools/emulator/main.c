@@ -9,6 +9,7 @@
 
 static void run_program(void)
 {
+    setjmp(trap_jb);
     for (;;)
         step();
 }
@@ -21,6 +22,8 @@ int main(int argc, char **argv)
     char initial_prog[PATH_MAX * 2];
 
     init_fdtab();
+    signals_init();
+    syscalls_init();
 
     if (parse_args(argc, argv, &arg_index, &guest_chdir) != 0)
         return 2;
@@ -36,9 +39,12 @@ int main(int argc, char **argv)
 
     if (load_program(initial_prog, argc - arg_index,
                      argv + arg_index) != 0) {
-        fprintf(stderr, "pdp11: cannot load %s\n", initial_prog);
+        fprintf(stderr, "v4linux: cannot load %s\n", initial_prog);
         return 2;
     }
+
+    if (trace & TR_SYS)
+        tr_line("--- loaded %s (argc=%d) ---", initial_prog, argc - arg_index);
 
     run_program();
 

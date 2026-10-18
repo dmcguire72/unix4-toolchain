@@ -94,13 +94,13 @@ static int copy_script_to_root(const char *source,
 
     tmp_len = strlen(tmp_dir);
 
-    if (tmp_len + sizeof "/pdp11-script-XXXXXX" >
+    if (tmp_len + sizeof "/v4linux-script-XXXXXX" >
         sizeof template)
         goto fail;
 
     memcpy(template, tmp_dir, tmp_len);
-    memcpy(template + tmp_len, "/pdp11-script-XXXXXX",
-           sizeof "/pdp11-script-XXXXXX");
+    memcpy(template + tmp_len, "/v4linux-script-XXXXXX",
+           sizeof "/v4linux-script-XXXXXX");
 
     fd = mkstemp(template);
     if (fd < 0)

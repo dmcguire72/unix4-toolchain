@@ -18,13 +18,15 @@ EMULATOR_SRC = \
     tools/emulator/memory.c \
     tools/emulator/loader.c \
     tools/emulator/syscalls.c \
+	tools/emulator/signals.c \
     tools/emulator/fpu.c \
-    tools/emulator/cpu.c
+    tools/emulator/cpu.c \
+	tools/emulator/trace.c
 
-EMULATOR_HDR = tools/emulator/pdp11.h
+EMULATOR_HDR = tools/emulator/v4linux.h
 
 all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11
-emulator: $(BIN)/pdp11
+emulator: $(BIN)/v4linux $(BIN)/unix4-dispatch
 
 $(BIN) $(BLD):
 	mkdir -p $@
@@ -44,8 +46,11 @@ $(BIN)/cc1: $(PASS1) $(SRC)/cc1.h $(SRC)/ccw.h | $(BIN)
 $(BIN)/cc11: $(SRC)/cc11.c | $(BIN)
 	$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
 
-$(BIN)/pdp11: $(EMULATOR_SRC) $(EMULATOR_HDR) | $(BIN)
+$(BIN)/v4linux: $(EMULATOR_SRC) $(EMULATOR_HDR) | $(BIN)
 	$(CC) $(CFLAGS) -Itools/emulator -o $@ $(EMULATOR_SRC) -lm
+
+$(BIN)/unix4-dispatch: tools/emulator/linux/unix4-dispatch.c | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $<
 
 check: all
 	@fail=0; t=$$(mktemp -d); \
