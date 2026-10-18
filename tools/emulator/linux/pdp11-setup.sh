@@ -13,6 +13,7 @@ WORK_DIR="$STATE_DIR/work"
 HOST_STAGING=/var/run/pdp11-v4-host-staging
 BINFMT_DIR=/proc/sys/fs/binfmt_misc
 BINFMT_MARKER=/run/pdp11-binfmt-mounted-by-pdp11
+RUNTIME_SCRIPT="$PDP11_DEST/pdp11-runtime"
 
 usage() {
     cat <<'USAGE'
@@ -151,6 +152,75 @@ printf '%s\n' ':pdp11-aout-0407:M::\x07\x01::/usr/local/libexec/unix4-dispatch:'
 
 printf '%s\n' ':pdp11-aout-0410:M::\x08\x01::/usr/local/libexec/unix4-dispatch:' \
     > "$BINFMT_DIR/register"
+
+echo "Installing persistence..."
+
+cat <<EOF > "$RUNTIME_SCRIPT"
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+V4_DEST=$V4_DEST
+GUEST_ROOT=$GUEST_ROOT
+HOST_MOUNT="$GUEST_ROOT/host"
+HOME_MOUNT="$GUEST_ROOT/home"
+STATE_DIR=$STATE_DIR
+UPPER_DIR="$STATE_DIR/upper"
+WORK_DIR="$STATE_DIR/work"
+HOST_STAGING=$HOST_STAGING
+BINFMT_DIR=$BINFMT_DIR
+
+if ! mountpoint -q "\$BINFMT_DIR"; then
+    modprobe binfmt_misc 2>/dev/null || true
+    mount -t binfmt_misc binfmt_misc "\$BINFMT_DIR"
+fi
+
+install -d -m 0755 "\$GUEST_ROOT" "\$HOST_STAGING" "\$STATE_DIR" "\$UPPER_DIR" "\$WORK_DIR"
+
+mount --bind "\$HOST_STAGING" "\$HOST_STAGING"
+mount --make-private "\$HOST_STAGING"
+mount --rbind / "\$HOST_STAGING"
+mount --make-rslave "\$HOST_STAGING"
+
+mount -t overlay overlay -o "lowerdir=\$V4_DEST,upperdir=\$UPPER_DIR,workdir=\$WORK_DIR" "\$GUEST_ROOT"
+mount --make-private "\$GUEST_ROOT"
+
+install -d -m 0755 "\$HOME_MOUNT"
+mount --bind /home "\$HOME_MOUNT"
+mount --make-private "\$HOME_MOUNT"
+
+install -d -m 0755 "\$HOST_MOUNT"
+mount --move "\$HOST_STAGING" "\$HOST_MOUNT"
+
+for name in pdp11-aout-0407 pdp11-aout-0410; do
+    if [[ -e "\$BINFMT_DIR/\$name" ]]; then
+        printf '%s\n' -1 > "\$BINFMT_DIR/\$name"
+    fi
+done
+printf '%s\n' ':pdp11-aout-0407:M::\x07\x01::/usr/local/libexec/unix4-dispatch:' > "\$BINFMT_DIR/register"
+printf '%s\n' ':pdp11-aout-0410:M::\x08\x01::/usr/local/libexec/unix4-dispatch:' > "\$BINFMT_DIR/register"
+EOF
+
+chmod +x "$RUNTIME_SCRIPT"
+
+cat <<EOF > /etc/systemd/system/pdp11.service
+[Unit]
+Description=PDP-11 Unix v4 Persistence
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$RUNTIME_SCRIPT
+ExecStop=/bin/umount -R $GUEST_ROOT
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable pdp11.service
+
+echo "Persistence installed via systemd."
 
 cat <<EOF
 setup complete.

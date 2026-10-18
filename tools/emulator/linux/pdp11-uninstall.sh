@@ -11,20 +11,20 @@ STATE_DIR=/var/run/pdp11-v4-overlay
 HOST_STAGING=/var/run/pdp11-v4-host-staging
 BINFMT_DIR=/proc/sys/fs/binfmt_misc
 BINFMT_MARKER=/run/pdp11-binfmt-mounted-by-pdp11
+RUNTIME_SCRIPT="$PDP11_DEST/pdp11-runtime"
+SERVICE_FILE=/etc/systemd/system/pdp11.service
 
 PURGE_V4=0
 PURGE_BIN=0
 
 usage() {
     cat <<'USAGE'
-Usage: sudo ./pdp11-uninstall.sh [--purge-v4] [--purge-bin] [--purge-all]
+Usage: sudo ./pdp11-uninstall.sh [--purge-v4]
 
 Default: unregister PDP-11 handlers, unmount the V4 host/overlay mounts, and
-remove the installed dispatcher. Preserves /opt/v4 and /opt/v4/bin.
+remove the installed dispatcher.
 
   --purge-v4   Also delete /opt/v4
-  --purge-bin  Also delete /opt/pdp11
-  --purge-all  Delete both /opt/v4 and /opt/pdp11
 USAGE
 }
 
@@ -41,6 +41,14 @@ while (($#)); do
     esac
     shift
 done
+
+if systemctl list-unit-files pdp11.service &>/dev/null || [[ -f "$SERVICE_FILE" ]]; then
+    systemctl disable --now pdp11.service 2>/dev/null || true
+    rm -f "$SERVICE_FILE"
+    systemctl daemon-reload
+fi
+
+rm -f "$RUNTIME_SCRIPT"
 
 if mountpoint -q "$BINFMT_DIR"; then
     for name in pdp11-aout-0407 pdp11-aout-0410; do
@@ -94,10 +102,6 @@ fi
 if (( PURGE_V4 )); then
     rm -rf -- "$V4_DEST"
     echo "Removed $V4_DEST"
-fi
-if (( PURGE_BIN )); then
-    rm -rf -- /opt/pdp11
-    echo "Removed /opt/pdp11"
 fi
 
 echo "pdp11 binfmt integration uninstalled."
