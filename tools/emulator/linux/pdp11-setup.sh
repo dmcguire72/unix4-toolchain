@@ -18,10 +18,9 @@ usage() {
     cat <<'USAGE'
 Usage: sudo ./pdp11-setup.sh /path/to/extracted-v4-root /path/to/pdp11-bin-dir
 
-The second argument must be a directory containing the executable
-binaries named `pdp11` and `unix4-dispatch`.
-The directory's contents are copied to /opt/v4/bin/.
-The unix4-dispatch binary is installed to /usr/local/libexec/unix4-dispatch.
+You can get Unix v4 from https://danielm.pages.dev/useful/unix_v4.tar.xz.
+
+The second argument must be the bin folder from 'make emulator'.
 USAGE
 }
 
