@@ -67,7 +67,7 @@ int load_image(const char *path, int argc, char **argv)
 		fread(mem, 1, ts, f);
 		fread(mem + dbase, 1, ds, f);
 	} else {
-		fread(mem, 1, (size_t)ts + ds, f)
+		fread(mem, 1, (size_t)ts + ds, f);
 	}
 	fclose(f);
 

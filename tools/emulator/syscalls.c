@@ -229,12 +229,12 @@ static uint8_t g_nice;
 
 static uint8_t map_uid(uid_t u)
 {
-	return u == geteuid() ? 0 : (uint8_t)u;
+	return (uint8_t)u;
 }
 
 static uint8_t map_gid(gid_t g)
 {
-	return g == getegid() ? 0 : (uint8_t)g;
+	return (uint8_t)g;
 }
 
 static int suser(void)
@@ -281,6 +281,11 @@ void syscalls_init(void)
 	my_gpid = (p > 1 && p <= 65535) ? (uint16_t)p : 1;
 	par_gpid = 0;
 	par_hpid = 0;
+
+	g_uid  = (uint8_t)geteuid();
+	g_ruid = (uint8_t)getuid();
+	g_gid  = (uint8_t)getegid();
+	g_rgid = (uint8_t)getgid();
 }
 
 static int proc_is_us(pid_t p)

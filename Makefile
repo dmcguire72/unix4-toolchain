@@ -23,7 +23,7 @@ EMULATOR_SRC = \
     tools/emulator/cpu.c \
 	tools/emulator/trace.c
 
-EMULATOR_HDR = tools/emulator/v4linux.h
+EMULATOR_HDR = tools/emulator/pdp11.h
 
 all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11
 emulator: $(BIN)/v4linux $(BIN)/unix4-dispatch
