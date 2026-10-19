@@ -29,7 +29,7 @@ int host_to_guest_sig(int h)
 	return 0;
 }
 
-static void host_handler(int hs)
+static inline void host_handler(int hs)
 {
 	int g = host_to_guest_sig(hs);
 
@@ -112,7 +112,7 @@ void die_by_sig(int g)
 	_exit(128 + g);
 }
 
-static void deliver(int g)
+static inline void deliver(int g)
 {
 	uint16_t h = sigtab[g];
 

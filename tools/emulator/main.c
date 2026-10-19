@@ -11,8 +11,7 @@
 static void run_program(void)
 {
     setjmp(trap_jb);
-    for (;;)
-        step();
+    run_cpu();
 }
 
 int main(int argc, char **argv)

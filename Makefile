@@ -26,7 +26,7 @@ EMULATOR_SRC = \
 EMULATOR_HDR = tools/emulator/pdp11.h
 
 all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11
-emulator: $(BIN)/v4linux $(BIN)/unix4-dispatch
+emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch
 
 $(BIN) $(BLD):
 	mkdir -p $@
@@ -49,7 +49,7 @@ $(BIN)/cc11: $(SRC)/cc11.c | $(BIN)
 $(BIN)/v4linux: $(EMULATOR_SRC) $(EMULATOR_HDR) | $(BIN)
 	$(CC) $(CFLAGS) -Itools/emulator -o $@ $(EMULATOR_SRC) -lm
 
-$(BIN)/unix4-dispatch: tools/emulator/linux/unix4-dispatch.c | $(BIN)
+$(BIN)/v4linux-dispatch: tools/emulator/linux/v4linux-dispatch.c | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $<
 
 check: all

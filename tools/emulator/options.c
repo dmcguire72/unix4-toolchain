@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+int host_enabled = 0;
+
 int parse_args(int argc, char **argv, int *arg_index,
                const char **guest_chdir)
 {
@@ -43,6 +45,9 @@ int parse_args(int argc, char **argv, int *arg_index,
                    ai + 1 < argc) {
             *guest_chdir = argv[ai + 1];
             ai += 2;
+        } else if (!strcmp(argv[ai], "--host")) {
+            host_enabled = 1;
+            ai++;
         } else if (!strcmp(argv[ai], "-x")) {
             stop_at_exec = 1;
             ai++;
@@ -68,8 +73,9 @@ int parse_args(int argc, char **argv, int *arg_index,
 
     if (ai >= argc) {
         fprintf(stderr,
-                "usage: v4linux [-r root] [--chdir dir] [-x] [-s] [-t] [-F] [-T] [-o file]\n"
+                "usage: v4linux [-r root] [--chdir dir] [--host] [-x] [-s] [-t] [-F] [-T] [-o file]\n"
                 "              prog args...\n"
+                "  --host  enable host integrations\n"
                 "  -s  trace guest system calls (strace style)\n"
                 "  -t  trace every instruction     -F  trace FP instructions\n"
                 "  -T  all traces                  -o  write trace to file\n");

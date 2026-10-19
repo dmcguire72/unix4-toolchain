@@ -14,7 +14,7 @@ void trace_open(const char *path)
 	int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0644);
 
 	if (fd < 0) {
-		perror("pdp11: trace file");
+		perror("v4linux: trace file");
 		return;
 	}
 	trace_fd = fd;
@@ -86,7 +86,7 @@ const char *trace_signame(int s)
 	return (s >= 0 && s < V4_NSIG) ? signames[s] : "SIG?";
 }
 
-static void cat(char *out, size_t sz, const char *fmt, ...)
+static inline void cat(char *out, size_t sz, const char *fmt, ...)
 {
 	size_t l = strlen(out);
 	va_list ap;
@@ -122,18 +122,18 @@ static void qbytes(char *out, size_t sz, uint16_t addr, int len, int stop_nul)
 		cat(out, sz, "...");
 }
 
-static void qstr(char *out, size_t sz, uint16_t addr)
+static inline void qstr(char *out, size_t sz, uint16_t addr)
 {
 	qbytes(out, sz, addr, 4096, 1);
 }
 
-static void fmt_sig(char *out, size_t sz, unsigned s)
+static inline void fmt_sig(char *out, size_t sz, unsigned s)
 {
 	if (s < V4_NSIG) cat(out, sz, "%s", signames[s]);
 	else cat(out, sz, "%u", s);
 }
 
-static void fmt_handler(char *out, size_t sz, uint16_t h)
+static inline void fmt_handler(char *out, size_t sz, uint16_t h)
 {
 	if (h == 0) cat(out, sz, "SIG_DFL");
 	else if (h & 1) cat(out, sz, "SIG_IGN");
@@ -318,17 +318,17 @@ void trace_note_reset(void)
 
 static const char *const rn[8] = { "r0", "r1", "r2", "r3", "r4", "r5", "sp", "pc" };
 
-static uint16_t rdmem(uint16_t a)
+static inline uint16_t rdmem(uint16_t a)
 {
 	return mem[a] | mem[(uint16_t)(a + 1)] << 8;
 }
 
-static void oct(char *o, size_t n, uint16_t v)
+static inline void oct(char *o, size_t n, uint16_t v)
 {
 	snprintf(o, n, "%o", v);
 }
 
-static void operand(char *o, size_t n, int mode, int reg, uint16_t *ext, int fp)
+static inline void operand(char *o, size_t n, int mode, int reg, uint16_t *ext, int fp)
 {
 	uint16_t x;
 	char t[24];
@@ -367,7 +367,7 @@ static void operand(char *o, size_t n, int mode, int reg, uint16_t *ext, int fp)
 	}
 }
 
-static void ccop(char *o, size_t n, uint16_t ir)
+static inline void ccop(char *o, size_t n, uint16_t ir)
 {
 	int set = ir & 020, i;
 	static const char L[4] = { 'c', 'v', 'z', 'n' };
@@ -539,7 +539,7 @@ int disasm(uint16_t pc, char *out, size_t n)
 	return pc + 2;
 }
 
-static void raw_words(char *o, size_t n, uint16_t pc, uint16_t end)
+static inline void raw_words(char *o, size_t n, uint16_t pc, uint16_t end)
 {
 	int k;
 

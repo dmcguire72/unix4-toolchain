@@ -10,15 +10,15 @@
 #include <sys/wait.h>
 
 static const char *PDP11 = "/opt/v4/bin/v4linux";
-static const char *GUEST_ROOT = "/var/run/pdp11-v4";
-static const char *HOST_MOUNT = "/var/run/pdp11-v4/host";
+static const char *GUEST_ROOT = "/var/run/v4";
+static const char *HOST_MOUNT = "/var/run/v4/host";
 static const char *SYS_ROOT = "/opt/v4/sys";
 
-static void fail(const char *fmt, ...)
+static inline void fail(const char *fmt, ...)
 {
     va_list args;
 
-    fprintf(stderr, "unix4-dispatch: ");
+    fprintf(stderr, "v4linux-dispatch: ");
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);                                
     va_end(args);
@@ -27,7 +27,7 @@ static void fail(const char *fmt, ...)
     exit(126);
 }
 
-static int path_has_prefix(const char *path, const char *prefix)
+static inline int path_has_prefix(const char *path, const char *prefix)
 {
     size_t len = strlen(prefix);
 
@@ -35,7 +35,7 @@ static int path_has_prefix(const char *path, const char *prefix)
            (path[len] == '\0' || path[len] == '/');
 }
 
-static char *duplicate_or_fail(const char *s)
+static inline char *duplicate_or_fail(const char *s)
 {
     char *copy = strdup(s);
 
@@ -45,7 +45,7 @@ static char *duplicate_or_fail(const char *s)
     return copy;
 }
 
-static char *translate_path(const char *path)
+static inline char *translate_path(const char *path)
 {
     const char *suffix;
     char *translated = NULL;
@@ -89,7 +89,7 @@ static char *translate_path(const char *path)
     return translated;
 }
 
-static char *translate_embedded_path(
+static inline char *translate_embedded_path(
     const char *arg,
     const char *path_start)
 {
@@ -109,7 +109,7 @@ static char *translate_embedded_path(
     return result;
 }
 
-static char *translate_argument(const char *arg)
+static inline char *translate_argument(const char *arg)
 {
     static const char *const path_options[] = {
         "-I",
@@ -169,7 +169,7 @@ static char *translate_argument(const char *arg)
     return duplicate_or_fail(arg);
 }
 
-static int is_mountpoint(const char *path)
+static inline int is_mountpoint(const char *path)
 {
     pid_t pid = fork();
 
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
         fail("emulator not installed or not executable: %s", PDP11);
 
     if (!is_mountpoint(GUEST_ROOT))
-        fail("V4 guest root is not mounted; run pdp11-setup.sh first");
+        fail("V4 guest root is not mounted; run v4linux-setup.sh first");
 
     if (!is_mountpoint(HOST_MOUNT))
         fail("host root is not mounted at %s", HOST_MOUNT);
@@ -232,20 +232,21 @@ int main(int argc, char *argv[])
     if (setenv("PWD", guest_cwd, 1) != 0)
         fail("cannot update PWD: %s", strerror(errno));
 
-    char **emu_argv = calloc((size_t)argc + 5, sizeof(*emu_argv));
+    char **emu_argv = calloc((size_t)argc + 6, sizeof(*emu_argv));
 
     if (emu_argv == NULL)
         fail("memory allocation failed");
 
     emu_argv[0] = (char *)PDP11;
-    emu_argv[1] = "-r";
-    emu_argv[2] = (char *)GUEST_ROOT;
-    emu_argv[3] = "--chdir";
-    emu_argv[4] = guest_cwd;
-    emu_argv[5] = guest_exec;
+    emu_argv[1] = "--host";
+    emu_argv[2] = "-r";
+    emu_argv[3] = (char *)GUEST_ROOT;
+    emu_argv[4] = "--chdir";
+    emu_argv[5] = guest_cwd;
+    emu_argv[6] = guest_exec;
 
     for (int i = 2; i < argc; ++i)
-        emu_argv[i + 4] = translate_argument(argv[i]);
+        emu_argv[i + 5] = translate_argument(argv[i]);
 
     execv(PDP11, emu_argv);
 

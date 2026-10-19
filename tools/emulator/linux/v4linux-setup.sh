@@ -3,21 +3,21 @@ set -Eeuo pipefail
 
 V4_DEST=/opt/v4/sys
 PDP11_DEST=/opt/v4/bin
-DISPATCH_DEST=/usr/local/libexec/unix4-dispatch
-GUEST_ROOT=/var/run/pdp11-v4
+DISPATCH_DEST=/usr/local/libexec/v4linux-dispatch
+GUEST_ROOT=/var/run/v4
 HOST_MOUNT="$GUEST_ROOT/host"
 HOME_MOUNT="$GUEST_ROOT/home"
-STATE_DIR=/var/run/pdp11-v4-overlay
+STATE_DIR=/var/run/v4-overlay
 UPPER_DIR="$STATE_DIR/upper"
 WORK_DIR="$STATE_DIR/work"
-HOST_STAGING=/var/run/pdp11-v4-host-staging
+HOST_STAGING=/var/run/v4-host-staging
 BINFMT_DIR=/proc/sys/fs/binfmt_misc
-BINFMT_MARKER=/run/pdp11-binfmt-mounted-by-pdp11
-RUNTIME_SCRIPT="$PDP11_DEST/pdp11-runtime"
+BINFMT_MARKER=/run/v4-binfmt-mounted-by-v4linux
+RUNTIME_SCRIPT="$PDP11_DEST/v4linux-runtime"
 
 usage() {
     cat <<'USAGE'
-Usage: sudo ./pdp11-setup.sh /path/to/extracted-v4-root /path/to/pdp11-bin-dir
+Usage: sudo ./v4linux-setup.sh /path/to/extracted-v4-root /path/to/v4linux-bin-dir
 
 You can get Unix v4 from https://danielm.pages.dev/useful/unix_v4.tar.xz.
 
@@ -26,7 +26,7 @@ USAGE
 }
 
 die() {
-    echo "pdp11-setup: $*" >&2
+    echo "v4linux-setup: $*" >&2
     exit 1
 }
 
@@ -45,8 +45,8 @@ BIN_SOURCE=$(realpath -e -- "$2") || die "cannot resolve bin source: $2"
 [[ -x "$BIN_SOURCE/v4linux" && -f "$BIN_SOURCE/v4linux" ]] ||
     die "expected executable $BIN_SOURCE/v4linux"
 
-[[ -x "$BIN_SOURCE/unix4-dispatch" && -f "$BIN_SOURCE/unix4-dispatch" ]] ||
-    die "expected executable $BIN_SOURCE/unix4-dispatch"
+[[ -x "$BIN_SOURCE/v4linux-dispatch" && -f "$BIN_SOURCE/v4linux-dispatch" ]] ||
+    die "expected executable $BIN_SOURCE/v4linux-dispatch"
 
 check_not_nested() {
     local src=$1
@@ -69,7 +69,7 @@ check_not_nested() {
 }
 
 if mountpoint -q "$GUEST_ROOT"; then
-    die "$GUEST_ROOT is already mounted; run pdp11-uninstall.sh first, then set it up again."
+    die "$GUEST_ROOT is already mounted; run v4linux-uninstall.sh first, then set it up again."
 fi
 
 if mountpoint -q "$HOST_STAGING"; then
@@ -84,14 +84,14 @@ if [[ "$V4_SOURCE" != "$V4_DEST" ]]; then
 fi
 
 if [[ "$BIN_SOURCE" != "$PDP11_DEST" ]]; then
-    check_not_nested "$BIN_SOURCE" "$PDP11_DEST" "pdp11 bin"
+    check_not_nested "$BIN_SOURCE" "$PDP11_DEST" "v4linux bin"
     cp -a -- "$BIN_SOURCE/." "$PDP11_DEST/"
 fi
 
 [[ -x "$PDP11_DEST/v4linux" ]] ||
     die "installed emulator is not executable: $PDP11_DEST/v4linux"
 
-install -m 0755 "$BIN_SOURCE/unix4-dispatch" "$DISPATCH_DEST"
+install -m 0755 "$BIN_SOURCE/v4linux-dispatch" "$DISPATCH_DEST"
 
 if ! mountpoint -q "$BINFMT_DIR"; then
     modprobe binfmt_misc 2>/dev/null || true
@@ -141,16 +141,16 @@ fi
 umount "$HOST_STAGING" 2>/dev/null || true
 rmdir "$HOST_STAGING" 2>/dev/null || true
 
-for name in pdp11-aout-0407 pdp11-aout-0410; do
+for name in v4linux-aout-0407 v4linux-aout-0410; do
     if [[ -e "$BINFMT_DIR/$name" ]]; then
         printf '%s\n' -1 > "$BINFMT_DIR/$name"
     fi
 done
 
-printf '%s\n' ':pdp11-aout-0407:M::\x07\x01::/usr/local/libexec/unix4-dispatch:' \
+printf '%s\n' ':v4linux-aout-0407:M::\x07\x01::/usr/local/libexec/v4linux-dispatch:' \
     > "$BINFMT_DIR/register"
 
-printf '%s\n' ':pdp11-aout-0410:M::\x08\x01::/usr/local/libexec/unix4-dispatch:' \
+printf '%s\n' ':v4linux-aout-0410:M::\x08\x01::/usr/local/libexec/v4linux-dispatch:' \
     > "$BINFMT_DIR/register"
 
 echo "Installing persistence..."
@@ -191,18 +191,18 @@ mount --make-private "\$HOME_MOUNT"
 install -d -m 0755 "\$HOST_MOUNT"
 mount --move "\$HOST_STAGING" "\$HOST_MOUNT"
 
-for name in pdp11-aout-0407 pdp11-aout-0410; do
+for name in v4linux-aout-0407 v4linux-aout-0410; do
     if [[ -e "\$BINFMT_DIR/\$name" ]]; then
         printf '%s\n' -1 > "\$BINFMT_DIR/\$name"
     fi
 done
-printf '%s\n' ':pdp11-aout-0407:M::\x07\x01::/usr/local/libexec/unix4-dispatch:' > "\$BINFMT_DIR/register"
-printf '%s\n' ':pdp11-aout-0410:M::\x08\x01::/usr/local/libexec/unix4-dispatch:' > "\$BINFMT_DIR/register"
+printf '%s\n' ':v4linux-aout-0407:M::\x07\x01::/usr/local/libexec/v4linux-dispatch:' > "\$BINFMT_DIR/register"
+printf '%s\n' ':v4linux-aout-0410:M::\x08\x01::/usr/local/libexec/v4linux-dispatch:' > "\$BINFMT_DIR/register"
 EOF
 
 chmod +x "$RUNTIME_SCRIPT"
 
-cat <<EOF > /etc/systemd/system/pdp11.service
+cat <<EOF > /etc/systemd/system/v4linux.service
 [Unit]
 Description=PDP-11 Unix v4 Persistence
 After=local-fs.target
@@ -218,7 +218,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable pdp11.service
+systemctl enable v4linux.service
 
 echo "Persistence installed via systemd."
 

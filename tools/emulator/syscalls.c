@@ -17,6 +17,8 @@
 #include <sys/wait.h>
 #include <sys/times.h>
 
+static int hx_saved[V4_NOFILE], hx_src[V4_NOFILE];
+
 void mappath(uint16_t a, char *out)
 {
 	char tmp[PATH_MAX];
@@ -439,6 +441,37 @@ static void sys_nosys(void)
 	trap_sig(V4_SIGSYS);
 }
 
+static void host_fds_install(void)
+{
+	int i;
+
+	fflush(NULL);
+	for (i = 0; i < V4_NOFILE; i++) {
+		hx_saved[i] = fcntl(i, F_DUPFD_CLOEXEC, 64);
+		hx_src[i] = fdtab[i] >= 0 ? fcntl(fdtab[i], F_DUPFD_CLOEXEC, 64) : -1;
+	}
+	for (i = 0; i < V4_NOFILE; i++) {
+		if (hx_src[i] >= 0) dup2(hx_src[i], i);
+		else close(i);
+	}
+}
+
+static void host_fds_restore(void)
+{
+	int i, e = errno;
+
+	for (i = 0; i < V4_NOFILE; i++) {
+		if (hx_saved[i] >= 0) {
+			dup2(hx_saved[i], i);
+			close(hx_saved[i]);
+		} else {
+			close(i);
+		}
+		if (hx_src[i] >= 0) close(hx_src[i]);
+	}
+	errno = e;
+}
+
 int exec_host_program(const char *path, char **argv)
 {
     if (strchr(path, '/') != NULL)
@@ -680,7 +713,8 @@ static void do_sys(int n, uint16_t *a)
 				}
 			}
 
-			if (strncmp(original_guest_path, "/host", 5) == 0) {
+			host_fds_install();
+			if (host_enabled && strncmp(original_guest_path, "/host", 5) == 0) {
 				const char *direct_path = original_guest_path + 5;
 				if (*direct_path == '\0') direct_path = "/";
 				
@@ -698,6 +732,7 @@ static void do_sys(int n, uint16_t *a)
 				else { av[0] = mapped_p; }
 				execv(mapped_p, av);
 			}
+			host_fds_restore();
 			
 			seterr(v4errno(errno));
 			return;

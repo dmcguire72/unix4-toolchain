@@ -21,65 +21,121 @@ static uint16_t pop(void)
 	return v;
 }
 
-static void double_op(uint16_t ir, int opc, int byte)
+#define REGBIT 0x10000u
+
+static inline __attribute__((always_inline))
+uint32_t opaddr(int mode, int reg, int size)
+{
+	int inc = (reg >= 6 && size < 2) ? 2 : size;
+	uint16_t x, a;
+
+	switch (mode) {
+	case 0: return REGBIT | reg;
+	case 1: return R[reg];
+	case 2: a = R[reg]; R[reg] += inc; return a;
+	case 3: a = rdw(R[reg]); R[reg] += 2; return a;
+	case 4: R[reg] -= inc; return R[reg];
+	case 5: R[reg] -= 2; return rdw(R[reg]);
+	case 6: x = rdw(PC); PC += 2; return (uint16_t)(R[reg] + x);
+	default: x = rdw(PC); PC += 2; return rdw(R[reg] + x);
+	}
+}
+
+static inline __attribute__((always_inline))
+uint16_t ldv(uint32_t a, int byte)
+{
+	if (a & REGBIT) {
+		uint16_t v = R[a & 7];
+
+		return byte ? v & 0377 : v;
+	}
+	if (byte) {
+		mchk(a);
+		return mem[a];
+	}
+	return rdw(a);
+}
+
+static inline __attribute__((always_inline))
+void stv(uint32_t a, uint16_t v, int byte)
+{
+	if (a & REGBIT) {
+		if (byte) R[a & 7] = (R[a & 7] & 0177400) | (v & 0377);
+		else R[a & 7] = v;
+	} else if (byte) {
+		mchk(a);
+		mem[a] = v;
+	} else {
+		wrw(a, v);
+	}
+}
+
+static inline __attribute__((always_inline))
+void double_op(uint16_t ir, int opc, int byte)
 {
 	int sm = (ir >> 9) & 7, sr = (ir >> 6) & 7;
 	int dm = (ir >> 3) & 7, dr = ir & 7;
 	uint16_t s, d, r;
+	uint32_t sa, da;
 	uint16_t sign = byte ? 0x80 : 0x8000;
 
 	switch (opc) {
 	case 1:	/* MOV / MOVB */
-		getop(sm, sr, byte);
-		s = load(byte);
-		getop(dm, dr, byte);
+		sa = opaddr(sm, sr, byte ? 1 : 2);
+		s = ldv(sa, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
 		nz(s, byte);
 		fV = 0;
-		if (byte) storeb_sext(s); else store(s, 0);
+		if (byte) {
+			if (da & REGBIT) R[da & 7] = (uint16_t)(int16_t)(int8_t)s;
+			else { mchk(da); mem[da] = s; }
+		} else {
+			stv(da, s, 0);
+		}
 		return;
 	case 2:	/* CMP / CMPB: src - dst */
-		getop(sm, sr, byte);
-		s = load(byte);
-		getop(dm, dr, byte);
-		d = load(byte);
+		sa = opaddr(sm, sr, byte ? 1 : 2);
+		s = ldv(sa, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		d = ldv(da, byte);
 		r = s - d;
 		nz(r, byte);
 		fV = ((s ^ d) & (s ^ r) & sign) != 0;
 		fC = byte ? (s & 0xff) < (d & 0xff) : s < d;
 		return;
 	case 3:	/* BIT / BITB */
-		getop(sm, sr, byte);
-		s = load(byte);
-		getop(dm, dr, byte);
-		d = load(byte);
+		sa = opaddr(sm, sr, byte ? 1 : 2);
+		s = ldv(sa, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		d = ldv(da, byte);
 		nz(s & d, byte);
 		fV = 0;
 		return;
 	case 4:	/* BIC / BICB */
-		getop(sm, sr, byte);
-		s = load(byte);
-		getop(dm, dr, byte);
-		d = load(byte);
+		sa = opaddr(sm, sr, byte ? 1 : 2);
+		s = ldv(sa, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		d = ldv(da, byte);
 		r = d & ~s;
 		nz(r, byte);
 		fV = 0;
-		store(r, byte);
+		stv(da, r, byte);
 		return;
 	case 5:	/* BIS / BISB */
-		getop(sm, sr, byte);
-		s = load(byte);
-		getop(dm, dr, byte);
-		d = load(byte);
+		sa = opaddr(sm, sr, byte ? 1 : 2);
+		s = ldv(sa, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		d = ldv(da, byte);
 		r = d | s;
 		nz(r, byte);
 		fV = 0;
-		store(r, byte);
+		stv(da, r, byte);
 		return;
-	case 6:	/* ADD (word) / SUB (byte flag set) */
-		getop(sm, sr, 0);
-		s = load(0);
-		getop(dm, dr, 0);
-		d = load(0);
+	default: /* 6: ADD (word) / SUB (byte flag set) */
+		sa = opaddr(sm, sr, 2);
+		s = ldv(sa, 0);
+		da = opaddr(dm, dr, 2);
+		d = ldv(da, 0);
 		if (!byte) {
 			uint32_t t = (uint32_t)s + d;
 
@@ -92,7 +148,7 @@ static void double_op(uint16_t ir, int opc, int byte)
 			fC = d < s;
 		}
 		nz(r, 0);
-		store(r, 0);
+		stv(da, r, 0);
 		return;
 	}
 }
@@ -101,13 +157,14 @@ static void eis_op(uint16_t ir)
 {
 	int rg = (ir >> 6) & 7, dm = (ir >> 3) & 7, dr = ir & 7;
 	uint16_t s, d, r;
+	uint32_t da;
 
 	switch ((ir >> 9) & 7) {
 	case 0: { /* MUL */
 		int32_t res;
 
-		getop(dm, dr, 0);
-		s = load(0);
+		da = opaddr(dm, dr, 2);
+		s = ldv(da, 0);
 		res = (int32_t)(int16_t)R[rg] * (int16_t)s;
 		if (rg & 1) R[rg] = res;
 		else { R[rg] = res >> 16; R[rg | 1] = res; }
@@ -121,8 +178,8 @@ static void eis_op(uint16_t ir)
 		int64_t dv, q;
 		int16_t sv;
 
-		getop(dm, dr, 0);
-		sv = load(0);
+		da = opaddr(dm, dr, 2);
+		sv = ldv(da, 0);
 		if (sv == 0) {		/* divide by zero */
 			fN = 0; fZ = 0; fV = 1; fC = 1;
 			return;
@@ -147,8 +204,8 @@ static void eis_op(uint16_t ir)
 		int n, k;
 		int16_t v = R[rg], cur;
 
-		getop(dm, dr, 0);
-		n = load(0) & 077;
+		da = opaddr(dm, dr, 2);
+		n = ldv(da, 0) & 077;
 		if (n & 040) n -= 64;
 		fV = fC = 0;
 		cur = v;
@@ -172,8 +229,8 @@ static void eis_op(uint16_t ir)
 		int n, k;
 		int32_t v = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]), cur;
 
-		getop(dm, dr, 0);
-		n = load(0) & 077;
+		da = opaddr(dm, dr, 2);
+		n = ldv(da, 0) & 077;
 		if (n & 040) n -= 64;
 		fV = fC = 0;
 		cur = v;
@@ -196,12 +253,12 @@ static void eis_op(uint16_t ir)
 		return;
 	}
 	case 4: /* XOR */
-		getop(dm, dr, 0);
-		d = load(0);
+		da = opaddr(dm, dr, 2);
+		d = ldv(da, 0);
 		r = d ^ R[rg];
 		nz(r, 0);
 		fV = 0;
-		store(r, 0);
+		stv(da, r, 0);
 		return;
 	case 7: /* SOB */
 		if (--R[rg] != 0) PC -= 2 * (ir & 077);
@@ -211,116 +268,118 @@ static void eis_op(uint16_t ir)
 	trap_sig(V4_SIGINS);
 }
 
-static void single_op(uint16_t ir, int byte)
+static inline __attribute__((always_inline))
+void single_op(uint16_t ir, int byte)
 {
 	int dm = (ir >> 3) & 7, dr = ir & 7;
 	uint16_t m = byte ? 0xff : 0xffff;
 	uint16_t sb = byte ? 0x80 : 0x8000;
 	uint16_t v;
 	int c, nc;
+	uint32_t da;
 
 	switch ((ir >> 6) & 077) {
 	case 050: /* CLR */
-		getop(dm, dr, byte);
-		store(0, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		stv(da, 0, byte);
 		fN = 0; fZ = 1; fV = fC = 0;
 		return;
 	case 051: /* COM */
-		getop(dm, dr, byte);
-		v = ~load(byte);
-		store(v, byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ~ldv(da, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		fV = 0; fC = 1;
 		return;
 	case 052: /* INC */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		fV = (v & m) == (sb - 1);
 		v++;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		return;
 	case 053: /* DEC */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		fV = (v & m) == sb;
 		v--;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		return;
 	case 054: /* NEG */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		fV = (v & m) == sb;
 		v = -v;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		fC = (v & m) != 0;
 		return;
 	case 055: /* ADC */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		c = fC;
 		fV = c && (v & m) == (sb - 1);
 		fC = c && (v & m) == m;
 		v += c;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		return;
 	case 056: /* SBC */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		c = fC;
 		fV = c && (v & m) == sb;
 		fC = c && (v & m) == 0;
 		v -= c;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		return;
 	case 057: /* TST */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		nz(v, byte);
 		fV = fC = 0;
 		return;
 	case 060: /* ROR */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		nc = v & 1;
 		v = (v & m) >> 1;
 		if (fC) v |= sb;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		fC = nc;
 		fV = fN ^ fC;
 		return;
 	case 061: /* ROL */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		nc = (v & sb) != 0;
 		v = v << 1;
 		if (fC) v |= 1;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		fC = nc;
 		fV = fN ^ fC;
 		return;
 	case 062: /* ASR */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		nc = v & 1;
 		v = ((v & m) >> 1) | (v & sb);
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		fC = nc;
 		fV = fN ^ fC;
 		return;
 	case 063: /* ASL */
-		getop(dm, dr, byte);
-		v = load(byte);
+		da = opaddr(dm, dr, byte ? 1 : 2);
+		v = ldv(da, byte);
 		nc = (v & sb) != 0;
 		v = v << 1;
-		store(v, byte);
+		stv(da, v, byte);
 		nz(v, byte);
 		fC = nc;
 		fV = fN ^ fC;
@@ -333,13 +392,13 @@ static void single_op(uint16_t ir, int byte)
 			return;
 		}
 		/* MTPS */
-		getop(dm, dr, 1);
-		set_ps_cc(load(1));
+		da = opaddr(dm, dr, 1);
+		set_ps_cc(ldv(da, 1));
 		return;
 	case 065: /* MFPI / MFPD */
 		if (byte) break;
-		getop(dm, dr, 0);
-		v = load(0);
+		da = opaddr(dm, dr, 2);
+		v = ldv(da, 0);
 		push(v);
 		nz(v, 0);
 		fV = 0;
@@ -347,26 +406,26 @@ static void single_op(uint16_t ir, int byte)
 	case 066: /* MTPI / MTPD */
 		if (byte) break;
 		v = pop();
-		getop(dm, dr, 0);
-		store(v, 0);
+		da = opaddr(dm, dr, 2);
+		stv(da, v, 0);
 		nz(v, 0);
 		fV = 0;
 		return;
 	case 067:
 		if (!byte) { /* SXT */
-			getop(dm, dr, 0);
-			store(fN ? 0xffff : 0, 0);
+			da = opaddr(dm, dr, 2);
+			stv(da, fN ? 0xffff : 0, 0);
 			fZ = !fN;
 			fV = 0;
 			return;
 		}
 		/* MFPS */
-		getop(dm, dr, 1);
+		da = opaddr(dm, dr, 1);
 		v = fN << 3 | fZ << 2 | fV << 1 | fC;
-		if (regdst >= 0) R[regdst] = (uint16_t)(int16_t)(int8_t)v;
+		if (da & REGBIT) R[da & 7] = (uint16_t)(int16_t)(int8_t)v;
 		else {
-			mem_check(ea);
-			mem[ea] = v;
+			mchk(da);
+			mem[da] = v;
 		}
 		nz(v, 1);
 		fV = 0;
@@ -379,6 +438,7 @@ static void misc_op(uint16_t ir)
 {
 	int dm = (ir >> 3) & 7, dr = ir & 7;
 	uint16_t t;
+	uint32_t da;
 
 	switch (ir >> 6) {
 	case 0:
@@ -405,9 +465,9 @@ static void misc_op(uint16_t ir)
 		}
 		trap_sig(V4_SIGINS);	/* MFPT + unused */
 	case 1:	/* JMP */
-		getop(dm, dr, 0);
-		if (regdst >= 0) trap_sig(V4_SIGBUS);
-		PC = ea;
+		da = opaddr(dm, dr, 2);
+		if (da & REGBIT) trap_sig(V4_SIGBUS);
+		PC = da;
 		return;
 	case 2:
 		if ((ir & 070) == 0) {	/* RTS */
@@ -428,10 +488,10 @@ static void misc_op(uint16_t ir)
 		}
 		break;
 	case 3:	/* SWAB */
-		getop(dm, dr, 0);
-		t = load(0);
+		da = opaddr(dm, dr, 2);
+		t = ldv(da, 0);
 		t = t >> 8 | t << 8;
-		store(t, 0);
+		stv(da, t, 0);
 		fN = (t & 0x80) != 0;
 		fZ = (t & 0xff) == 0;
 		fV = fC = 0;
@@ -440,57 +500,62 @@ static void misc_op(uint16_t ir)
 	trap_sig(V4_SIGINS);
 }
 
-void step(void)
+static inline __attribute__((always_inline)) void step_one(void)
 {
 	uint16_t ir;
-	int opc, byte;
 
-	if (sig_pending) check_signals();
-	if (prof_scale && ++prof_tick >= 8192) {
-		prof_tick = 0;
-		prof_sample();
+	if (UNLIKELY(sig_pending || prof_scale || trace)) {
+		if (sig_pending) check_signals();
+		if (prof_scale && ++prof_tick >= 8192) {
+			prof_tick = 0;
+			prof_sample();
+		}
+		if (trace & TR_CPU)
+			trace_cpu();
 	}
-	if (trace & TR_CPU)
-		trace_cpu();
 
 	ir = rdw(PC);
 	PC += 2;
-	opc = ir >> 12;
-	byte = (ir >> 15) & 1;
 
-	switch (opc & 7) {
-	case 1: case 2: case 3: case 4: case 5: case 6:
-		double_op(ir, opc & 7, byte);
-		return;
-	case 7:
-		if (opc == 7) { eis_op(ir); return; }
-		fstep(ir);		/* 17xxxx: fp */
-		return;
-	}
-
-	if (!byte) {
-		if (ir < 0000400 || (ir >= 0000400 && ir < 0004000)) {
-			if (ir >= 0000400) {
-				switch (ir & 0177400) {
-				case 0000400: branch(1, ir); return;
-				case 0001000: branch(!fZ, ir); return;
-				case 0001400: branch(fZ, ir); return;
-				case 0002000: branch(!(fN ^ fV), ir); return;
-				case 0002400: branch(fN ^ fV, ir); return;
-				case 0003000: branch(!(fZ | (fN ^ fV)), ir); return;
-				case 0003400: branch(fZ | (fN ^ fV), ir); return;
-				}
-			}
+	switch (ir >> 12) {
+	case 1: double_op(ir, 1, 0); return;
+	case 2: double_op(ir, 2, 0); return;
+	case 3: double_op(ir, 3, 0); return;
+	case 4: double_op(ir, 4, 0); return;
+	case 5: double_op(ir, 5, 0); return;
+	case 6: double_op(ir, 6, 0); return;
+	case 9: double_op(ir, 1, 1); return;
+	case 10: double_op(ir, 2, 1); return;
+	case 11: double_op(ir, 3, 1); return;
+	case 12: double_op(ir, 4, 1); return;
+	case 13: double_op(ir, 5, 1); return;
+	case 14: double_op(ir, 6, 1); return;
+	case 7: eis_op(ir); return;
+	case 15: fstep(ir); return;		/* 17xxxx: fp */
+	case 0:
+		if (ir < 0000400) {
 			misc_op(ir);
 			return;
+		}
+		if (ir < 0004000) {
+			switch (ir & 0177400) {
+			case 0000400: branch(1, ir); return;
+			case 0001000: branch(!fZ, ir); return;
+			case 0001400: branch(fZ, ir); return;
+			case 0002000: branch(!(fN ^ fV), ir); return;
+			case 0002400: branch(fN ^ fV, ir); return;
+			case 0003000: branch(!(fZ | (fN ^ fV)), ir); return;
+			default:      branch(fZ | (fN ^ fV), ir); return;
+			}
 		}
 		if ((ir & 0177000) == 0004000) {	/* JSR */
 			int rg = (ir >> 6) & 7;
 			uint16_t t;
 
-			getop((ir >> 3) & 7, ir & 7, 0);
-			if (regdst >= 0) trap_sig(V4_SIGBUS);
-			t = ea;
+			uint32_t da = opaddr((ir >> 3) & 7, ir & 7, 2);
+
+			if (da & REGBIT) trap_sig(V4_SIGBUS);
+			t = da;
 			push(R[rg]);
 			R[rg] = PC;
 			PC = t;
@@ -502,15 +567,26 @@ void step(void)
 
 	switch (ir & 0177400) {
 	case 0100000: branch(!fN, ir); return;		/* BPL  */
-	case 0100400: branch(fN, ir); return;			/* BMI  */
+	case 0100400: branch(fN, ir); return;		    /* BMI  */
 	case 0101000: branch(!(fC | fZ), ir); return;	/* BHI  */
 	case 0101400: branch(fC | fZ, ir); return;	/* BLOS */
 	case 0102000: branch(!fV, ir); return;		/* BVC  */
-	case 0102400: branch(fV, ir); return;			/* BVS  */
+	case 0102400: branch(fV, ir); return;		    /* BVS  */
 	case 0103000: branch(!fC, ir); return;		/* BCC  */
-	case 0103400: branch(fC, ir); return;			/* BCS  */
-	case 0104000: trap_sig(V4_SIGEMT);			/* EMT  */
-	case 0104400: v4sys(ir & 077); return;			/* TRAP */
+	case 0103400: branch(fC, ir); return;		    /* BCS  */
+	case 0104000: trap_sig(V4_SIGEMT);		    /* EMT  */
+	case 0104400: v4sys(ir & 077); return;		    /* TRAP */
 	}
 	single_op(ir, 1);
+}
+
+void step(void)
+{
+	step_one();
+}
+
+void run_cpu(void)
+{
+	for (;;)
+		step_one();
 }

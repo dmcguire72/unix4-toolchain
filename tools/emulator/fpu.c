@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 #define FPS_FER	0100000
 #define FPS_FIV	0001000
@@ -26,6 +27,15 @@ void fp_reset(void)
 	fpN = fpZ = fpV = fpC = 0;
 }
 
+static inline double pow2i(int k)
+{
+	uint64_t u = (uint64_t)(k + 1023) << 52;
+	double d;
+
+	memcpy(&d, &u, sizeof d);
+	return d;
+}
+
 static double fget(uint16_t a, int dbl)
 {
 	uint16_t w0 = rdw(a);
@@ -39,14 +49,14 @@ static double fget(uint16_t a, int dbl)
 	if (dbl) {
 		m = (m << 16) | rdw(a + 4);
 		m = (m << 16) | rdw(a + 6);
-		v = ldexp((double)m, e - 128 - 56);
+		v = (double)m * pow2i(e - 128 - 56);
 	} else {
-		v = ldexp((double)m, e - 128 - 24);
+		v = (double)m * pow2i(e - 128 - 24);
 	}
 	return (w0 & 0x8000) ? -v : v;
 }
 
-static void fput(uint16_t a, double v, int dbl)
+static void fput_slow(uint16_t a, double v, int dbl)
 {
 	int e, sign = v < 0;
 	double m;
@@ -86,7 +96,7 @@ zero:
 	if (dbl) { wrw(a + 4, 0); wrw(a + 6, 0); }
 }
 
-static double rnd(double x)
+static double rnd_slow(double x)
 {
 	int e;
 	double m;
@@ -96,6 +106,68 @@ static double rnd(double x)
 	m = ldexp(m, 24);
 	m = TRUNC ? trunc(m) : (m < 0 ? -floor(-m + 0.5) : floor(m + 0.5));
 	return ldexp(m, e - 24);
+}
+
+static void fput(uint16_t a, double v, int dbl)
+{
+	const uint64_t SIGNBIT = 1ULL << 63;
+	uint64_t b, mant;
+	int sign = v < 0, e;
+	uint16_t w0;
+
+	if (v == 0 || isnan(v) || isinf(v)) goto zero;
+	memcpy(&b, &v, sizeof b);
+	b &= ~SIGNBIT;
+	if (UNLIKELY((b >> 52) == 0)) {
+		fput_slow(a, v, dbl);
+		return;
+	}
+	if (dbl) {
+		mant = ((1ULL << 52) | (b & ((1ULL << 52) - 1))) << 3;
+	} else {
+		if (!TRUNC) b += 1ULL << 28;
+		b &= ~((1ULL << 29) - 1);
+		mant = (1ULL << 23) | ((b >> 29) & 0x7fffff);
+	}
+	e = (int)(b >> 52) - 894;
+	if (e <= 0) goto zero;
+	if (e > 255) {
+		if (fps & FPS_FIV) trap_sig(V4_SIGFPT);
+		goto zero;
+	}
+	if (dbl) {
+		w0 = (sign << 15) | (e << 7) | ((mant >> 48) & 0x7f);
+		wrw(a, w0);
+		wrw(a + 2, mant >> 32);
+		wrw(a + 4, mant >> 16);
+		wrw(a + 6, mant);
+	} else {
+		w0 = (sign << 15) | (e << 7) | ((mant >> 16) & 0x7f);
+		wrw(a, w0);
+		wrw(a + 2, mant);
+	}
+	return;
+zero:
+	wrw(a, 0);
+	wrw(a + 2, 0);
+	if (dbl) { wrw(a + 4, 0); wrw(a + 6, 0); }
+}
+
+static double rnd(double x)
+{
+	const uint64_t SIGNBIT = 1ULL << 63;
+	uint64_t b, mag;
+
+	if (DBL || x == 0 || isnan(x) || isinf(x)) return x;
+	memcpy(&b, &x, sizeof b);
+	mag = b & ~SIGNBIT;
+	if (UNLIKELY((mag >> 52) == 0))
+		return rnd_slow(x);
+	if (!TRUNC) mag += 1ULL << 28;
+	mag &= ~((1ULL << 29) - 1);
+	b = (b & SIGNBIT) | mag;
+	memcpy(&x, &b, sizeof x);
+	return x;
 }
 
 static void fcc(double v)
@@ -115,7 +187,7 @@ static double fsrc(int mode, int reg, int dbl)
 		int e = (w0 >> 7) & 0xff;
 		if (e == 0) return 0.0;
 		uint64_t m = (uint64_t)(0x80 | (w0 & 0x7f)) << (dbl ? 48 : 16);
-		double v = ldexp((double)m, e - 128 - (dbl ? 56 : 24));
+		double v = (double)m * pow2i(e - 128 - (dbl ? 56 : 24));
 		return (w0 & 0x8000) ? -v : v;
 	}
 
@@ -291,22 +363,29 @@ static void fstep_exec(uint16_t ir)
 	trap_sig(V4_SIGINS);
 }
 
-void fstep(uint16_t ir)
+static void fstep_traced(uint16_t ir)
 {
 	char text[96] = "";
 	uint16_t at = PC - 2;
 
-	if (trace & TR_FPU)
-		disasm(at, text, sizeof text);
+	disasm(at, text, sizeof text);
 
 	fstep_exec(ir);
 
-	if (trace & TR_FPU)
-		tr_line("[fpu] %06o: %-22o %-28s "
-			"ac0=%-5g ac1=%-5g ac2=%-5g ac3=%-5g "
-			"fps=%06o %s/%s cc=%c%c%c%c",
-			at, ir, text, ac[0], ac[1], ac[2], ac[3], get_fps(),
-			DBL ? "double" : "float", LNG ? "long" : "int",
-			fpN ? 'N' : '-', fpZ ? 'Z' : '-', fpV ? 'V' : '-',
-			fpC ? 'C' : '-');
+	tr_line("[fpu] %06o: %-22o %-28s "
+		"ac0=%-5g ac1=%-5g ac2=%-5g ac3=%-5g "
+		"fps=%06o %s/%s cc=%c%c%c%c",
+		at, ir, text, ac[0], ac[1], ac[2], ac[3], get_fps(),
+		DBL ? "double" : "float", LNG ? "long" : "int",
+		fpN ? 'N' : '-', fpZ ? 'Z' : '-', fpV ? 'V' : '-',
+		fpC ? 'C' : '-');
+}
+
+void fstep(uint16_t ir)
+{
+	if (UNLIKELY(trace & TR_FPU)) {
+		fstep_traced(ir);
+		return;
+	}
+	fstep_exec(ir);
 }

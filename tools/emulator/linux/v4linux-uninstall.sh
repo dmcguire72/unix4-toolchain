@@ -3,32 +3,32 @@ set -Eeuo pipefail
 
 V4_DEST=/opt/v4/sys
 PDP11_DEST=/opt/v4/bin
-DISPATCH_DEST=/usr/local/libexec/unix4-dispatch
-GUEST_ROOT=/var/run/pdp11-v4
+DISPATCH_DEST=/usr/local/libexec/v4linux-dispatch
+GUEST_ROOT=/var/run/v4
 HOST_MOUNT="$GUEST_ROOT/host"
 HOME_MOUNT="$GUEST_ROOT/home"
-STATE_DIR=/var/run/pdp11-v4-overlay
-HOST_STAGING=/var/run/pdp11-v4-host-staging
+STATE_DIR=/var/run/v4-overlay
+HOST_STAGING=/var/run/v4-host-staging
 BINFMT_DIR=/proc/sys/fs/binfmt_misc
-BINFMT_MARKER=/run/pdp11-binfmt-mounted-by-pdp11
-RUNTIME_SCRIPT="$PDP11_DEST/pdp11-runtime"
-SERVICE_FILE=/etc/systemd/system/pdp11.service
+BINFMT_MARKER=/run/v4-binfmt-mounted-by-v4linux
+RUNTIME_SCRIPT="$PDP11_DEST/v4linux-runtime"
+SERVICE_FILE=/etc/systemd/system/v4linux.service
 
 PURGE_V4=0
 PURGE_BIN=0
 
 usage() {
     cat <<'USAGE'
-Usage: sudo ./pdp11-uninstall.sh [--purge-v4]
+Usage: sudo ./v4linux-uninstall.sh [--purge-v4]
 
-Default: unregister PDP-11 handlers, unmount the V4 host/overlay mounts, and
+Unregister v4linux handlers, unmount the V4 host/overlay mounts, and
 remove the installed dispatcher.
 
   --purge-v4   Also delete /opt/v4
 USAGE
 }
 
-die() { echo "pdp11-uninstall: $*" >&2; exit 1; }
+die() { echo "v4linux-uninstall: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "run this script as root (for example, with sudo)."
 
 while (($#)); do
@@ -42,8 +42,8 @@ while (($#)); do
     shift
 done
 
-if systemctl list-unit-files pdp11.service &>/dev/null || [[ -f "$SERVICE_FILE" ]]; then
-    systemctl disable --now pdp11.service 2>/dev/null || true
+if systemctl list-unit-files v4linux.service &>/dev/null || [[ -f "$SERVICE_FILE" ]]; then
+    systemctl disable --now v4linux.service 2>/dev/null || true
     rm -f "$SERVICE_FILE"
     systemctl daemon-reload
 fi
@@ -51,7 +51,7 @@ fi
 rm -f "$RUNTIME_SCRIPT"
 
 if mountpoint -q "$BINFMT_DIR"; then
-    for name in pdp11-aout-0407 pdp11-aout-0410; do
+    for name in v4linux-aout-0407 v4linux-aout-0410; do
         if [[ -e "$BINFMT_DIR/$name" ]]; then
             printf '%s\n' -1 > "$BINFMT_DIR/$name"
         fi
@@ -85,7 +85,7 @@ if [[ -e "$BINFMT_MARKER" ]] && mountpoint -q "$BINFMT_DIR"; then
         [[ -e "$entry" ]] || continue
         name=${entry##*/}
         case "$name" in
-            register|status|features|new_namespace|pdp11-aout-0407|pdp11-aout-0410) ;;
+            register|status|features|new_namespace|v4linux-aout-0407|v4linux-aout-0410) ;;
             *) other_handler=1; break ;;
         esac
     done
@@ -104,4 +104,4 @@ if (( PURGE_V4 )); then
     echo "Removed $V4_DEST"
 fi
 
-echo "pdp11 binfmt integration uninstalled."
+echo "v4linux binfmt integration uninstalled."
