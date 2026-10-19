@@ -108,6 +108,17 @@ static void fcc(double v)
 static double fsrc(int mode, int reg, int dbl)
 {
 	if (mode == 0) return ac[reg & 7];
+
+	if (mode == 2 && reg == 7) {
+		uint16_t w0 = rdw(PC);
+		PC += 2;
+		int e = (w0 >> 7) & 0xff;
+		if (e == 0) return 0.0;
+		uint64_t m = (uint64_t)(0x80 | (w0 & 0x7f)) << (dbl ? 48 : 16);
+		double v = ldexp((double)m, e - 128 - (dbl ? 56 : 24));
+		return (w0 & 0x8000) ? -v : v;
+	}
+
 	getops(mode, reg, dbl ? 8 : 4);
 	return fget(ea, dbl);
 }
@@ -282,15 +293,20 @@ static void fstep_exec(uint16_t ir)
 
 void fstep(uint16_t ir)
 {
-	char text[96];
+	char text[96] = "";
 	uint16_t at = PC - 2;
 
-	if (trace & TR_FPU) disasm(at, text, sizeof text);
-	fstep_exec(ir);
 	if (trace & TR_FPU)
-		tr_line("[fpu] %06o: %06o %-26s ac0=%g ac1=%g ac2=%g ac3=%g "
-			"fps=%06o %s/%s cc=%c%c%c%c", at, ir, text, ac[0], ac[1],
-			ac[2], ac[3], get_fps(), DBL ? "double" : "float",
-			LNG ? "long" : "int", fpN ? 'N' : '-', fpZ ? 'Z' : '-',
-			fpV ? 'V' : '-', fpC ? 'C' : '-');
+		disasm(at, text, sizeof text);
+
+	fstep_exec(ir);
+
+	if (trace & TR_FPU)
+		tr_line("[fpu] %06o: %-22o %-28s "
+			"ac0=%-5g ac1=%-5g ac2=%-5g ac3=%-5g "
+			"fps=%06o %s/%s cc=%c%c%c%c",
+			at, ir, text, ac[0], ac[1], ac[2], ac[3], get_fps(),
+			DBL ? "double" : "float", LNG ? "long" : "int",
+			fpN ? 'N' : '-', fpZ ? 'Z' : '-', fpV ? 'V' : '-',
+			fpC ? 'C' : '-');
 }

@@ -12,7 +12,7 @@ int load_image(const char *path, int argc, char **argv)
 	uint8_t h[16];
 	int i, nc = 0;
 	uint16_t sp, magic, ts, ds, bs, ap, c;
-	size_t dbase = 0;
+	size_t dbase = 0, image_end;
 
 	if (stat(path, &st) < 0) {
 		load_errno = errno == ENOENT || errno == ENAMETOOLONG ? 2 :
@@ -73,6 +73,8 @@ int load_image(const char *path, int argc, char **argv)
 
 	sp = (uint16_t)(-nc - argc * 2 - 4);
 	SP = sp;
+	image_end = magic == 0410 ? dbase + ds + bs : (size_t)ts + ds + bs;
+	mem_reset(image_end);
 	wrw(sp, argc);
 	ap = sp;
 	c = (uint16_t)-nc;

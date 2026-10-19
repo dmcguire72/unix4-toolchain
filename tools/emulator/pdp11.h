@@ -39,6 +39,13 @@ extern int trace;
 extern int regdst;
 extern uint16_t ea;
 
+extern uint32_t mem_brk;
+extern uint32_t stack_lo;
+void mem_reset(uint32_t image_end);
+void mem_set_brk(uint32_t end);
+void mem_fault(uint16_t a);
+void mem_check(uint16_t a);
+
 extern jmp_buf trap_jb;
 extern volatile sig_atomic_t sig_pending;
 extern int is_child;

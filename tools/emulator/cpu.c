@@ -364,7 +364,10 @@ static void single_op(uint16_t ir, int byte)
 		getop(dm, dr, 1);
 		v = fN << 3 | fZ << 2 | fV << 1 | fC;
 		if (regdst >= 0) R[regdst] = (uint16_t)(int16_t)(int8_t)v;
-		else mem[ea] = v;
+		else {
+			mem_check(ea);
+			mem[ea] = v;
+		}
 		nz(v, 1);
 		fV = 0;
 		return;

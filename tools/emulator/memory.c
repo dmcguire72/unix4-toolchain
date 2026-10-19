@@ -6,6 +6,49 @@
 int regdst;
 uint16_t ea;
 
+uint32_t mem_brk = 0200000;
+uint32_t stack_lo = 0200000;
+
+#define SINCR	(20 * 64)
+
+void mem_reset(uint32_t image_end)
+{
+	mem_brk = (image_end + 63) & ~63u;
+	stack_lo = (uint32_t)SP & ~63u;
+}
+
+void mem_set_brk(uint32_t end)
+{
+	mem_brk = (end + 63) & ~63u;
+}
+
+void mem_fault(uint16_t a)
+{
+	uint32_t sp = SP;
+
+	if (sp < stack_lo && sp >= mem_brk) {
+		uint32_t lo = (sp & ~63u);
+
+		lo = lo > SINCR + mem_brk ? lo - SINCR : mem_brk;
+		if (lo < stack_lo)
+			stack_lo = lo;
+		if (a >= stack_lo)
+			return;
+	}
+	trap_sig(V4_SIGSEG);
+}
+
+static inline void mchk(uint16_t a)
+{
+	if (a >= mem_brk && a < stack_lo)
+		mem_fault(a);
+}
+
+void mem_check(uint16_t a)
+{
+	mchk(a);
+}
+
 void die(const char *m, ...)
 {
 	fprintf(stderr, "v4linux: %s (pc=%06o)\n", m, PC);
@@ -15,12 +58,14 @@ void die(const char *m, ...)
 uint16_t rdw(uint16_t a)
 {
 	if (a & 1) trap_sig(V4_SIGBUS);
+	mchk(a);
 	return mem[a] | mem[a + 1] << 8;
 }
 
 void wrw(uint16_t a, uint16_t v)
 {
 	if (a & 1) trap_sig(V4_SIGBUS);
+	mchk(a);
 	mem[a] = v;
 	mem[a + 1] = v >> 8;
 }
@@ -51,7 +96,11 @@ void getop(int mode, int reg, int byte)
 uint16_t load(int byte)
 {
 	if (regdst >= 0) return byte ? R[regdst] & 0377 : R[regdst];
-	return byte ? mem[ea] : rdw(ea);
+	if (byte) {
+		mchk(ea);
+		return mem[ea];
+	}
+	return rdw(ea);
 }
 
 void store(uint16_t v, int byte)
@@ -60,6 +109,7 @@ void store(uint16_t v, int byte)
 		if (byte) R[regdst] = (R[regdst] & 0177400) | (v & 0377);
 		else R[regdst] = v;
 	} else if (byte) {
+		mchk(ea);
 		mem[ea] = v;
 	} else {
 		wrw(ea, v);
@@ -69,7 +119,10 @@ void store(uint16_t v, int byte)
 void storeb_sext(uint16_t v)
 {
 	if (regdst >= 0) R[regdst] = (uint16_t)(int16_t)(int8_t)v;
-	else mem[ea] = v;
+	else {
+		mchk(ea);
+		mem[ea] = v;
+	}
 }
 
 void nz(uint16_t v, int byte)

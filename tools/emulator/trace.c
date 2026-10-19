@@ -307,7 +307,7 @@ void trace_sys_line(int n, const uint16_t *a, uint16_t r0in, uint16_t r1in,
 	if (hostnote[0] || note_buf[0])
 		snprintf(extra, sizeof extra, "  /* %s%s%s */", hostnote,
 		    hostnote[0] && note_buf[0] ? "; " : "", note_buf);
-	tr_line("%s(%s) %s%s%s", nm, args, res, post, extra);
+	tr_line("[sys] %s(%s) %s%s%s", nm, args, res, post, extra);
 	note_buf[0] = 0;
 }
 
@@ -557,9 +557,9 @@ void trace_cpu(void)
 	uint16_t end = disasm(PC, text, sizeof text);
 
 	raw_words(raw, sizeof raw, PC, end);
-	tr_line("[cpu] %06o: %s %-24s r0=%06o r1=%06o r2=%06o r3=%06o r4=%06o "
-		"r5=%06o sp=%06o %c%c%c%c", PC, raw, text, R[0], R[1], R[2], R[3],
-		R[4], R[5], SP, fN ? 'N' : '-', fZ ? 'Z' : '-', fV ? 'V' : '-',
-		fC ? 'C' : '-');
+	tr_line("[cpu] %06o: %-22s %-28s r0=%06o r1=%06o r2=%06o r3=%06o "
+		"r4=%06o r5=%06o sp=%06o %c%c%c%c",
+		PC, raw, text, R[0], R[1], R[2], R[3], R[4], R[5], SP,
+		fN ? 'N' : '-', fZ ? 'Z' : '-', fV ? 'V' : '-', fC ? 'C' : '-');
 }
 

@@ -777,7 +777,12 @@ static void do_sys(int n, uint16_t *a)
 	case 17: { /* break */
 		uint32_t end = ((uint32_t)a[0] + 63) & ~63u;
 
-		if (end > ((uint32_t)SP & ~63u) && a[0] != 0) seterr(12);
+		if (end > ((uint32_t)SP & ~63u) && a[0] != 0) {
+			seterr(12);
+			return;
+		}
+		if (a[0] != 0)
+			mem_set_brk(end);
 
 		return;
 	}

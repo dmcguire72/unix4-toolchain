@@ -2,12 +2,38 @@
 #include "options.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int parse_args(int argc, char **argv, int *arg_index,
                const char **guest_chdir)
 {
     int ai = 1;
+    const char *env;
+
+    env = getenv("V4LINUX_TRACE_CPU");
+    if (env && !strcmp(env, "1"))
+        trace |= TR_CPU;
+
+    env = getenv("V4LINUX_TRACE_SYS");
+    if (env && !strcmp(env, "1"))
+        trace |= TR_SYS;
+
+    env = getenv("V4LINUX_TRACE_FPU");
+    if (env && !strcmp(env, "1"))
+        trace |= TR_FPU;
+
+    env = getenv("V4LINUX_TRACE_ALL");
+    if (env && !strcmp(env, "1"))
+        trace |= TR_CPU | TR_FPU | TR_SYS;
+
+    env = getenv("V4LINUX_STOP_AT_EXEC");
+    if (env && !strcmp(env, "1"))
+        stop_at_exec = 1;
+
+    env = getenv("V4LINUX_TRACE_FILE");
+    if (env && *env)
+        trace_open(env);
 
     while (ai < argc && argv[ai][0] == '-') {
         if (!strcmp(argv[ai], "-r") && ai + 1 < argc) {
