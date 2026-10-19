@@ -127,6 +127,9 @@ mnt
 tmp
 unix
 usr
+% echo hello world > file.txt
+% cat file.txt | /host/usr/bin/grep hello
+hello world
 ```
 
 ---
