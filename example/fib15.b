@@ -1,0 +1,10 @@
+10 a = 0
+20 b = 1
+30 for i = 1 15
+40 print a " "
+50 c = a+b
+60 a = b
+70 b = c
+80 next i
+90 print "done"
+run

@@ -1,3 +1,4 @@
 * text=auto
 orig/**/* linguist-detectable=false
 tests/**/* linguist-detectable=false
+example/**/*.b linguist-language=Basic
