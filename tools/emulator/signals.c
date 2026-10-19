@@ -89,15 +89,26 @@ void die_by_sig(int g)
 	struct sigaction sa;
 	sigset_t m;
 
-	if (!is_child && g >= V4_SIGINS && g != V4_SIGKIL) {
-		static const char *const nm[V4_NSIG] = {
-			0, 0, 0, 0, "illegal instruction", "trace/BPT trap",
-			"IOT trap", "EMT trap", "floating exception", 0,
-			"bus error / odd address", "segmentation violation",
-			"bad system call"
-		};
-		fprintf(stderr, "v4linux: %s (pc=%06o)\n", nm[g], PC);
-	}
+	    if (!is_child && g >= V4_SIGINS && g != V4_SIGKIL) {
+        static const char *const nm[V4_NSIG] = {
+            0, 0, 0, 0, "illegal instruction", "trace/BPT trap",
+            "IOT trap", "EMT trap", "floating exception", 0,
+            "bus error / odd address", "segmentation violation",
+            "bad system call"
+        };
+
+        fprintf(stderr, "v4linux: %s (pc=%06o)\n", nm[g], PC);
+
+        fprintf(stderr, "Registers:\n");
+        const char *reg_names[] = {"r0", "r1", "r2", "r3", "r4", "r5", "sp", "pc"};
+        for (int i = 0; i < 8; i++)
+            fprintf(stderr, "  %s: %06o\n", reg_names[i], R[i]);
+        fprintf(stderr, "Flags: N=%d Z=%d V=%d C=%d\n", fN, fZ, fV, fC);
+        
+        char inst[96];
+        disasm(PC, inst, sizeof inst);
+        fprintf(stderr, "Instruction at PC: [%s]\n", inst);
+    }
 	if (trace & TR_SYS) tr_line("+++ killed by %s +++", trace_signame(g));
 	tty_restore();
 	if (!hs) _exit(128 + g);
