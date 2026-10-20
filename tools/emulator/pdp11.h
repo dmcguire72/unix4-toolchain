@@ -34,7 +34,7 @@ extern int trace;
 #define TR_SYS 4
 #define TR_FUNC 8
 #define TR_ALL (TR_CPU | TR_FPU | TR_SYS | TR_FUNC)
-extern int crash_trace;		/* print a stack trace when the guest crashes */
+extern int crash_trace;
 
 #define SP R[6]
 #define PC R[7]

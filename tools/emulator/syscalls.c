@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -12,6 +13,8 @@
 #include <termios.h>
 #include <libgen.h>
 
+#include <pwd.h>
+
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <sys/wait.h>
@@ -19,7 +22,135 @@
 
 static int hx_saved[V4_NOFILE], hx_src[V4_NOFILE];
 
-void mappath(uint16_t a, char *out)
+static long time_shift = 883612800L;
+static long time_off;
+
+#define TTY_ECHO 010
+#define TTY_CRMOD 020
+#define TTY_RAW 040
+
+static struct termios tty_orig;
+static int tty_saved;
+static int tty_fd = -1;
+
+static uint8_t g_uid, g_ruid, g_gid, g_rgid;
+static uint8_t g_nice;
+
+#define MAXKIDS 50
+static struct { uint16_t g; pid_t h; } kids[MAXKIDS];
+static int nkids;
+static uint16_t my_gpid, par_gpid, alt_gpid = 30000;
+static pid_t par_hpid;
+
+static void v4_alias(const char *name, char out[15])
+{
+	size_t n = strlen(name), blen, elen = 0, plen;
+	const char *dot = strrchr(name, '.');
+	uint32_t h = 2166136261u;
+	size_t i;
+	char ext[5] = "";
+
+	if (n <= 14) {
+		memcpy(out, name, n + 1);
+		return;
+	}
+	for (i = 0; i < n; i++) {
+		h ^= (unsigned char)name[i];
+		h *= 16777619u;
+	}
+	h &= 0xffffff;
+	blen = n;
+	if (dot && dot != name) {
+		elen = strlen(dot);
+		if (elen <= 4) {
+			memcpy(ext, dot, elen + 1);
+			blen = (size_t)(dot - name);
+		} else {
+			elen = 0;
+		}
+	}
+	plen = 14 - 1 - 6 - elen;
+	if (plen > blen) plen = blen;
+	for (i = 0; i < plen; i++) {
+		unsigned char c = name[i];
+		out[i] = (c > ' ' && c < 0177 && c != '/' && c != '~') ? c : '_';
+	}
+	snprintf(out + plen, 15 - plen, "~%06x%s", (unsigned)h, ext);
+}
+
+static int looks_like_alias(const char *c)
+{
+	const char *t = strchr(c, '~');
+	size_t i;
+
+	if (strlen(c) > 14 || !t) return 0;
+	for (i = 0; i < 6; i++)
+		if (!isxdigit((unsigned char)t[1 + i])) return 0;
+	return 1;
+}
+
+static void unalias_path(char *path)
+{
+	char out[PATH_MAX * 2], comp[PATH_MAX];
+	const char *p = path;
+	size_t o = 0;
+
+	if (!strchr(path, '~')) return;
+	if (*p == '/') { out[o++] = '/'; while (*p == '/') p++; }
+	out[o] = 0;
+	while (*p) {
+		size_t l = strcspn(p, "/");
+		struct stat st;
+
+		if (l >= sizeof comp) return;
+		memcpy(comp, p, l);
+		comp[l] = 0;
+		if (l && looks_like_alias(comp)) {
+			char probe[PATH_MAX * 2];
+
+			snprintf(probe, sizeof probe, "%s%s", out, comp);
+			if (lstat(probe, &st) != 0 && errno == ENOENT) {
+				DIR *d = opendir(o ? out : ".");
+				struct dirent *e;
+				char al[15];
+
+				if (d) {
+					while ((e = readdir(d)) != NULL) {
+						if (strlen(e->d_name) <= 14) continue;
+						v4_alias(e->d_name, al);
+						if (!strcmp(al, comp)) {
+							snprintf(comp, sizeof comp, "%s", e->d_name);
+							break;
+						}
+					}
+					closedir(d);
+				}
+			}
+		}
+		o += snprintf(out + o, sizeof out - o, "%s", comp);
+		p += l;
+		if (*p == '/') {
+			o += snprintf(out + o, sizeof out - o, "/");
+			while (*p == '/') p++;
+		}
+	}
+	snprintf(path, PATH_MAX * 2, "%s", out);
+}
+
+static void time_shift_init(void)
+{
+	const char *e = getenv("V4LINUX_TIME_SHIFT_YEARS");
+
+	if (e) time_shift = (long)(atof(e) * 31556952.0);
+	time_off = -time_shift;
+}
+
+static uint32_t h2g_time(time_t t)
+{
+	return (uint32_t)(t - time_shift);
+}
+
+static void mappath_nl(uint16_t a, char *out)
 {
 	char tmp[PATH_MAX];
 	int i = 0;
@@ -103,6 +234,12 @@ void mappath(uint16_t a, char *out)
 			snprintf(out + cur, (PATH_MAX * 2) - cur, "/%s", stack[j]);
 		}
 	}
+}
+
+void mappath(uint16_t a, char *out)
+{
+	mappath_nl(a, out);
+	unalias_path(out);
 }
 
 static void seterr(int e)
@@ -202,9 +339,13 @@ static int open_v4_dir(const char *path)
             buf[0] = ino;
             buf[1] = ino >> 8;
 
-            n = strlen(ent->d_name);
-            if (n > 14) n = 14;
-            memcpy(buf + 2, ent->d_name, n);
+            {
+                char al[15];
+
+                v4_alias(ent->d_name, al);
+                n = strlen(al);
+                memcpy(buf + 2, al, n);
+            }
 
             if (write(fd, buf, 16) != 16) break;
         }
@@ -226,10 +367,6 @@ static long dir_size(const char *path)
 	return n * 16;
 }
 
-static uint8_t g_uid, g_ruid, g_gid, g_rgid;
-static long time_off;
-static uint8_t g_nice;
-
 static uint8_t map_uid(uid_t u)
 {
 	return (uint8_t)u;
@@ -246,12 +383,6 @@ static int suser(void)
 	seterr(1);
 	return 0;
 }
-
-#define MAXKIDS 50
-static struct { uint16_t g; pid_t h; } kids[MAXKIDS];
-static int nkids;
-static uint16_t my_gpid, par_gpid, alt_gpid = 30000;
-static pid_t par_hpid;
 
 static int gpid_used(uint16_t g)
 {
@@ -279,6 +410,7 @@ uint16_t cur_gpid(void)
 
 void syscalls_init(void)
 {
+	time_shift_init();
 	pid_t p = getpid();
 
 	my_gpid = (p > 1 && p <= 65535) ? (uint16_t)p : 1;
@@ -357,19 +489,12 @@ static void putstat(uint16_t ub, const struct stat *st, long size)
 	if (S_ISCHR(st->st_mode) || S_ISBLK(st->st_mode))
 		put16(ub, 12, (uint16_t)(major(st->st_rdev) << 8 |
 		    minor(st->st_rdev)));
-	put16(ub, 28, (uint32_t)st->st_atime >> 16);
-	put16(ub, 30, (uint32_t)st->st_atime & 0xffff);
-	put16(ub, 32, (uint32_t)st->st_mtime >> 16);
-	put16(ub, 34, (uint32_t)st->st_mtime & 0xffff);
+	put16(ub, 28, h2g_time(st->st_atime) >> 16);
+	put16(ub, 30, h2g_time(st->st_atime) & 0xffff);
+	put16(ub, 32, h2g_time(st->st_mtime) >> 16);
+	put16(ub, 34, h2g_time(st->st_mtime) & 0xffff);
 }
 
-#define TTY_ECHO 010
-#define TTY_CRMOD 020
-#define TTY_RAW 040
-
-static struct termios tty_orig;
-static int tty_saved;
-static int tty_fd = -1;
 
 void tty_restore(void)
 {
@@ -472,6 +597,19 @@ static void host_fds_restore(void)
 	errno = e;
 }
 
+static const char *host_view_path(const char *p)
+{
+	char pre[PATH_MAX];
+	size_t n;
+
+	if (root[0] == '\0' || !strcmp(root, "/"))
+		return NULL;
+	n = snprintf(pre, sizeof pre, "%s/host", root);
+	if (strncmp(p, pre, n) != 0 || (p[n] != '\0' && p[n] != '/'))
+		return NULL;
+	return p[n] ? p + n : "/";
+}
+
 int exec_host_program(const char *path, char **argv)
 {
     if (strchr(path, '/') != NULL)
@@ -480,6 +618,55 @@ int exec_host_program(const char *path, char **argv)
        execvp(path, argv);
     
     return errno;
+}
+
+static int open_v4_utmp(void)
+{
+    char tmptpl[] = "/tmp/v4utmpXXXXXX";
+    int fd = mkstemp(tmptpl);
+    if (fd < 0) return -1;
+    unlink(tmptpl);
+
+    uint8_t entry[16] = {0};
+
+    const char *user = getenv("USER");
+    if (!user) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw) user = pw->pw_name;
+    }
+    if (!user) user = "user";
+    strncpy((char *)entry, user, 8);
+
+    char tty_char = '0';
+    char *tname = ttyname(0);
+    if (!tname) tname = ttyname(1);
+    if (tname) {
+        size_t tlen = strlen(tname);
+        if (tlen > 0)
+            tty_char = tname[tlen - 1];
+    }
+    entry[8] = tty_char;
+    entry[9] = 0;
+
+    uint32_t now = (uint32_t)(time(NULL) + time_off);
+    uint16_t hi = (uint16_t)(now >> 16);
+    uint16_t lo = (uint16_t)(now & 0xffff);
+
+    entry[10] = hi & 0xff;
+    entry[11] = hi >> 8;
+    entry[12] = lo & 0xff;
+    entry[13] = lo >> 8;
+
+    entry[14] = 0;
+    entry[15] = 0;
+
+    if (write(fd, entry, 16) != 16) {
+        close(fd);
+        return -1;
+    }
+
+    lseek(fd, 0, SEEK_SET);
+    return fd;
 }
 
 static void do_sys(int n, uint16_t *a)
@@ -545,7 +732,11 @@ static void do_sys(int n, uint16_t *a)
 		struct stat st;
 
 		mappath(a[0], p);
-		if (stat(p, &st) == 0 && S_ISDIR(st.st_mode)) {
+
+		if (ends_with(p, "/tmp/utmp")) {
+			r = open_v4_utmp();
+			st.st_mode = 0;
+		} else if (stat(p, &st) == 0 && S_ISDIR(st.st_mode)) {
 			if (a[1] != 0) { seterr(21); return; }	/* EISDIR */
 			r = open_v4_dir(p);
 		} else {
@@ -700,17 +891,19 @@ static void do_sys(int n, uint16_t *a)
 			if (trace & TR_SYS)
 				tr_line("exec: %s not a V4 binary, handing to host", original_guest_path);
 			
-			char cwd[PATH_MAX];
-			if (getcwd(cwd, sizeof cwd) != NULL) {
-				char *real_cwd = cwd;
-				if (strncmp(cwd, "/run/v4/host", 12) == 0) {
-					real_cwd = cwd + 18;
-				} else if (strncmp(cwd, "/var/run/v4/host", 16) == 0) {
-					real_cwd = cwd + 22;
-				}
-				if (real_cwd != cwd) {
-					chdir(real_cwd);
-				}
+			char cwd[PATH_MAX], hcwd[PATH_MAX], oldpwd[PATH_MAX] = "";
+			int v4e;
+			int cwd_saved = getcwd(cwd, sizeof cwd) != NULL;
+			const char *op = getenv("PWD");
+
+			if (op) snprintf(oldpwd, sizeof oldpwd, "%s", op);
+			if (cwd_saved) {
+				const char *hp = host_view_path(cwd);
+
+				if (hp)
+					(void)chdir(hp);
+				if (getcwd(hcwd, sizeof hcwd) != NULL)
+					setenv("PWD", hcwd, 1);
 			}
 
 			host_fds_install();
@@ -733,8 +926,10 @@ static void do_sys(int n, uint16_t *a)
 				execv(mapped_p, av);
 			}
 			host_fds_restore();
-			
-			seterr(v4errno(errno));
+			v4e = v4errno(errno);
+			if (cwd_saved && chdir(cwd) == 0 && oldpwd[0])
+				setenv("PWD", oldpwd, 1);
+			seterr(v4e);
 			return;
 		}
 		seterr(load_errno);
