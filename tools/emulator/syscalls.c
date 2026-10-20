@@ -851,7 +851,6 @@ static void do_sys(int n, uint16_t *a)
 			return;
 		}
 		if (lstat(p, &st) == 0 && S_ISDIR(st.st_mode)) {
-			if (!suser()) return;
 			tnote("unlink of a directory translated to rmdir");
 			if (rmdir(p) < 0) hosterr();
 			return;
