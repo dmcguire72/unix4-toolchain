@@ -109,6 +109,12 @@ void die_by_sig(int g)
         disasm(PC, inst, sizeof inst);
         fprintf(stderr, "Instruction at PC: [%s]\n", inst);
     }
+    if (crash_trace && g >= V4_SIGINS && g != V4_SIGKIL) {
+        if (is_child)
+            fprintf(stderr, "v4linux: pid %u: signal %d (pc=%06o)\n",
+                    cur_gpid(), g, PC);
+        trace_backtrace();
+    }
 	if (trace & TR_SYS) tr_line("+++ killed by %s +++", trace_signame(g));
 	tty_restore();
 	if (!hs) _exit(128 + g);

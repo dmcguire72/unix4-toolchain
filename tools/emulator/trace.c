@@ -5,9 +5,15 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+
+#define MAXDEPTH 8192
+
 int trace_multi;
 static int trace_fd = 2;
 static char note_buf[256];
+
+static uint16_t call_slot[MAXDEPTH];
+static int call_depth;
 
 void trace_open(const char *path)
 {
@@ -563,3 +569,50 @@ void trace_cpu(void)
 		fN ? 'N' : '-', fZ ? 'Z' : '-', fV ? 'V' : '-', fC ? 'C' : '-');
 }
 
+void trace_calls_reset(void)
+{
+	call_depth = 0;
+}
+
+void trace_call(uint16_t inst, uint16_t target)
+{
+	char name[64], args[512], a[96];
+	uint16_t ret = rdmem(SP);
+	int i, narg = call_nargs(inst, ret);
+	int ind = call_depth < 24 ? call_depth * 2 : 48;
+
+	sym_target_name(target, name, sizeof name);
+	args[0] = 0;
+	for (i = 0; i < narg && i < 8; i++) {
+		fmt_arg(a, sizeof a, rdmem(SP + 2 + 2 * i));
+		snprintf(args + strlen(args), sizeof args - strlen(args), "%s%s",
+		    i ? ", " : "", a);
+	}
+	if (narg > 8)
+		snprintf(args + strlen(args), sizeof args - strlen(args), ", ...");
+	tr_line("[fn ] %*s%s(%s)", ind, "", name, args);
+	if (call_depth < MAXDEPTH)
+		call_slot[call_depth++] = SP;
+}
+
+void trace_ret(uint16_t slot)
+{
+	while (call_depth > 0 && call_slot[call_depth - 1] <= slot)
+		call_depth--;
+}
+
+static void crash_line(const char *line)
+{
+	fprintf(stderr, "%s\n", line);
+	if (trace_fd != 2)
+		tr_line("[stack] %s", line);
+}
+
+void trace_backtrace(void)
+{
+	fprintf(stderr, "Stack trace (most recent call first):\n");
+	if (sym_count() == 0)
+		fprintf(stderr, "  (no symbols: binary is stripped, "
+		    "functions shown by address)\n");
+	backtrace_walk(crash_line);
+}

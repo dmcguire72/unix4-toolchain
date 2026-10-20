@@ -471,6 +471,8 @@ static void misc_op(uint16_t ir)
 		return;
 	case 2:
 		if ((ir & 070) == 0) {	/* RTS */
+			if (dr == 7 && UNLIKELY(trace & TR_FUNC))
+				trace_ret(SP);
 			PC = R[dr];
 			R[dr] = pop();
 			return;
@@ -559,6 +561,8 @@ static inline __attribute__((always_inline)) void step_one(void)
 			push(R[rg]);
 			R[rg] = PC;
 			PC = t;
+			if (rg == 7 && UNLIKELY(trace & TR_FUNC))
+				trace_call(ir, t);
 			return;
 		}
 		single_op(ir, 0);

@@ -8,6 +8,9 @@ int stop_at_exec;
 int fdtab[16];
 uint16_t sigtab[64];
 int trace;
+int crash_trace;
+
+int host_enabled = 0;
 
 uint16_t prof_buf, prof_len, prof_off, prof_scale;
 int load_errno;

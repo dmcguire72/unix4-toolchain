@@ -703,9 +703,9 @@ static void do_sys(int n, uint16_t *a)
 			char cwd[PATH_MAX];
 			if (getcwd(cwd, sizeof cwd) != NULL) {
 				char *real_cwd = cwd;
-				if (strncmp(cwd, "/run/v4/host", 18) == 0) {
+				if (strncmp(cwd, "/run/v4/host", 12) == 0) {
 					real_cwd = cwd + 18;
-				} else if (strncmp(cwd, "/var/run/v4/host", 22) == 0) {
+				} else if (strncmp(cwd, "/var/run/v4/host", 16) == 0) {
 					real_cwd = cwd + 22;
 				}
 				if (real_cwd != cwd) {

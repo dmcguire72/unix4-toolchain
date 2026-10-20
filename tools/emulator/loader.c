@@ -69,6 +69,8 @@ int load_image(const char *path, int argc, char **argv)
 	} else {
 		fread(mem, 1, (size_t)ts + ds, f);
 	}
+	sym_load(f, h);
+	trace_calls_reset();
 	fclose(f);
 
 	sp = (uint16_t)(-nc - argc * 2 - 4);

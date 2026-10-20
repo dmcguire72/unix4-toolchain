@@ -32,6 +32,9 @@ extern int trace;
 #define TR_CPU 1
 #define TR_FPU 2
 #define TR_SYS 4
+#define TR_FUNC 8
+#define TR_ALL (TR_CPU | TR_FPU | TR_SYS | TR_FUNC)
+extern int crash_trace;		/* print a stack trace when the guest crashes */
 
 #define SP R[6]
 #define PC R[7]
@@ -200,5 +203,22 @@ void tnote(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void trace_sys_line(int n, const uint16_t *a, uint16_t r0in, uint16_t r1in,
 		    const char *pre_args, const char *hostnote, int deferred);
 void trace_note_reset(void);
+
+void sym_load(FILE *f, const uint8_t *hdr);
+void sym_free(void);
+int sym_count(void);
+const char *sym_exact(uint16_t v);
+const char *sym_nearest(uint16_t addr, unsigned *off);
+void sym_describe(uint16_t addr, char *out, size_t n);
+void sym_target_name(uint16_t target, char *out, size_t n);
+int call_target(uint16_t inst, uint16_t ret);
+int call_nargs(uint16_t inst, uint16_t ret);
+void fmt_arg(char *out, size_t n, uint16_t v);
+void backtrace_walk(void (*emit)(const char *line));
+
+void trace_call(uint16_t inst, uint16_t target);
+void trace_ret(uint16_t slot);
+void trace_calls_reset(void);
+void trace_backtrace(void);
 
 #endif

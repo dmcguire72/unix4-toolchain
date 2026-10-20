@@ -41,5 +41,7 @@ void mem_fault(uint16_t a)
 void die(const char *m, ...)
 {
 	fprintf(stderr, "v4linux: %s (pc=%06o)\n", m, PC);
+	if (crash_trace)
+		trace_backtrace();
 	exit(99);
 }

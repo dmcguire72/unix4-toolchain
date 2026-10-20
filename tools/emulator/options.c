@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-int host_enabled = 0;
-
 int parse_args(int argc, char **argv, int *arg_index,
                const char **guest_chdir)
 {
@@ -25,9 +23,19 @@ int parse_args(int argc, char **argv, int *arg_index,
     if (env && !strcmp(env, "1"))
         trace |= TR_FPU;
 
-    env = getenv("V4LINUX_TRACE_ALL");
+    env = getenv("V4LINUX_TRACE_FUNC");
     if (env && !strcmp(env, "1"))
-        trace |= TR_CPU | TR_FPU | TR_SYS;
+        trace |= TR_FUNC;
+
+    env = getenv("V4LINUX_TRACE_STACK");
+    if (env && !strcmp(env, "1"))
+        crash_trace = 1;
+
+    env = getenv("V4LINUX_TRACE_ALL");
+    if (env && !strcmp(env, "1")) {
+        trace |= TR_ALL;
+        crash_trace = 1;
+    }
 
     env = getenv("V4LINUX_STOP_AT_EXEC");
     if (env && !strcmp(env, "1"))
@@ -60,8 +68,17 @@ int parse_args(int argc, char **argv, int *arg_index,
         } else if (!strcmp(argv[ai], "-F")) {
             trace |= TR_FPU;
             ai++;
+        } else if (!strcmp(argv[ai], "-f") ||
+                   !strcmp(argv[ai], "--trace-func")) {
+            trace |= TR_FUNC;
+            ai++;
+        } else if (!strcmp(argv[ai], "-b") ||
+                   !strcmp(argv[ai], "--backtrace")) {
+            crash_trace = 1;
+            ai++;
         } else if (!strcmp(argv[ai], "-T")) {
-            trace |= TR_CPU | TR_FPU | TR_SYS;
+            trace |= TR_ALL;
+            crash_trace = 1;
             ai++;
         } else if (!strcmp(argv[ai], "-o") && ai + 1 < argc) {
             trace_open(argv[ai + 1]);
@@ -73,12 +90,15 @@ int parse_args(int argc, char **argv, int *arg_index,
 
     if (ai >= argc) {
         fprintf(stderr,
-                "usage: v4linux [-r root] [--chdir dir] [--host] [-x] [-s] [-t] [-F] [-T] [-o file]\n"
+                "usage: v4linux [-r root] [--chdir dir] [--host] [-x] [-s] [-t] [-F] [-f] [-b] [-T] [-o file]\n"
                 "              prog args...\n"
                 "  --host  enable host integrations\n"
                 "  -s  trace guest system calls (strace style)\n"
                 "  -t  trace every instruction     -F  trace FP instructions\n"
-                "  -T  all traces                  -o  write trace to file\n");
+                "  -f  trace function calls and their args (--trace-func)\n"
+                "  -b  stack trace on crash (--backtrace)\n"
+                "  -T  all traces, -o  write trace to file\n"
+                "env: V4LINUX_TRACE_{CPU,SYS,FPU,FUNC,STACK,ALL}=1, V4LINUX_TRACE_FILE=path\n");
         return 2;
     }
 
