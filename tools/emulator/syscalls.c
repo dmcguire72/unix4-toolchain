@@ -988,7 +988,7 @@ static void do_sys(int n, uint16_t *a)
 	case 14: { /* mknod */
 		uint16_t m = a[1];
 
-		if (!suser()) return;
+		if ((m & 060000) != 040000 && !suser()) return;
 		mappath(a[0], p);
 		switch (m & 060000) {
 		case 040000:
