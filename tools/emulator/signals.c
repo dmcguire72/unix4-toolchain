@@ -109,7 +109,9 @@ void die_by_sig(int g)
         disasm(PC, inst, sizeof inst);
         fprintf(stderr, "Instruction at PC: [%s]\n", inst);
     }
-    if (crash_trace && g >= V4_SIGINS && g != V4_SIGKIL) {
+	if (!crash_trace){
+		fprintf(stderr, "Use V4LINUX_TRACE_STACK to enable stacktracing:\n$ V4LINUX_TRACE_STACK=1 !!\n");
+	} else if (g >= V4_SIGINS && g != V4_SIGKIL) {
         if (is_child)
             fprintf(stderr, "v4linux: pid %u: signal %d (pc=%06o)\n",
                     cur_gpid(), g, PC);
