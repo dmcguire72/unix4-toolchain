@@ -690,6 +690,7 @@ static int open_v4_utmp(void)
     }
 
     lseek(fd, 0, SEEK_SET);
+	tnote("synthesized /tmp/utmp from host env");
     return fd;
 }
 
