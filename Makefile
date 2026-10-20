@@ -22,7 +22,8 @@ EMULATOR_SRC = \
     tools/emulator/fpu.c \
     tools/emulator/cpu.c \
 	tools/emulator/trace.c \
-	tools/emulator/symbols.c
+	tools/emulator/symbols.c \
+	tools/emulator/hooks.c
 
 EMULATOR_HDR = tools/emulator/pdp11.h
 

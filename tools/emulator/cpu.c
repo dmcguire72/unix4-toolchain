@@ -563,6 +563,8 @@ static inline __attribute__((always_inline)) void step_one(void)
 			PC = t;
 			if (rg == 7 && UNLIKELY(trace & TR_FUNC))
 				trace_call(ir, t);
+			if (rg == 7 && UNLIKELY(hooks_on))
+				jsr_hook(t);
 			return;
 		}
 		single_op(ir, 0);

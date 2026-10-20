@@ -20,6 +20,7 @@ usage() {
 Usage: sudo ./v4linux-setup.sh /path/to/extracted-v4-root /path/to/v4linux-bin-dir
 
 You can get Unix v4 from https://danielm.pages.dev/useful/unix_v4.tar.xz.
+If symbols are needed: https://danielm.pages.dev/useful/unix_v4_debug.tar.xz.
 
 The second argument must be the bin folder from 'make emulator'.
 USAGE

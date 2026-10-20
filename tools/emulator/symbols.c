@@ -158,6 +158,11 @@ static int sym_value(const char *name, uint16_t *v)
 	return 0;
 }
 
+int sym_lookup(const char *name, uint16_t *v)
+{
+	return sym_value(name, v);
+}
+
 int call_target(uint16_t inst, uint16_t ret)
 {
 	if (inst != 04737 && (inst & ~077) != 04700)

@@ -205,6 +205,12 @@ void trace_sys_line(int n, const uint16_t *a, uint16_t r0in, uint16_t r1in,
 void trace_note_reset(void);
 
 void sym_load(FILE *f, const uint8_t *hdr);
+int sym_lookup(const char *name, uint16_t *v);
+extern int hooks_on;
+void hooks_load(void);
+int jsr_hook(uint16_t target);
+long guest_time_shift(void);
+void step(void);
 void sym_free(void);
 int sym_count(void);
 const char *sym_exact(uint16_t v);

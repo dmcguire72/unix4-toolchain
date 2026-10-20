@@ -22,8 +22,10 @@
 
 static int hx_saved[V4_NOFILE], hx_src[V4_NOFILE];
 
+#define V4_FIXED_OFFSET (-4 * 3600)
 static long time_shift = 883612800L;
 static long time_off;
+static int tz_comp = 1;
 
 #define TTY_ECHO 010
 #define TTY_CRMOD 020
@@ -142,12 +144,34 @@ static void time_shift_init(void)
 	const char *e = getenv("V4LINUX_TIME_SHIFT_YEARS");
 
 	if (e) time_shift = (long)(atof(e) * 31556952.0);
-	time_off = -time_shift;
+	e = getenv("V4LINUX_TZ");
+	if (e && !strcmp(e, "0")) tz_comp = 0;
+	tzset();
+	time_off = 0;
+}
+
+long guest_time_shift(void)
+{
+	return time_shift;
+}
+
+static long tz_compensation(time_t t)
+{
+	struct tm tm;
+
+	if (!tz_comp || !localtime_r(&t, &tm))
+		return 0;
+	return tm.tm_gmtoff - V4_FIXED_OFFSET;
 }
 
 static uint32_t h2g_time(time_t t)
 {
-	return (uint32_t)(t - time_shift);
+	return (uint32_t)(t - time_shift + tz_compensation(t));
+}
+
+static uint32_t guest_now(void)
+{
+	return h2g_time(time(NULL)) + (uint32_t)time_off;
 }
 
 static void mappath_nl(uint16_t a, char *out)
@@ -648,7 +672,7 @@ static int open_v4_utmp(void)
     entry[8] = tty_char;
     entry[9] = 0;
 
-    uint32_t now = (uint32_t)(time(NULL) + time_off);
+    uint32_t now = guest_now();
     uint16_t hi = (uint16_t)(now >> 16);
     uint16_t lo = (uint16_t)(now & 0xffff);
 
@@ -955,7 +979,7 @@ static void do_sys(int n, uint16_t *a)
 		return;
 	}
 	case 13: { /* time */
-		uint32_t t = (uint32_t)(time(NULL) + time_off);
+		uint32_t t = guest_now();
 
 		R[0] = t >> 16;
 		R[1] = t & 0xffff;
@@ -1065,7 +1089,8 @@ static void do_sys(int n, uint16_t *a)
 	case 25: /* stime */
 		if (!suser()) return;
 		tnote("clock offset kept in the emulator only");
-		time_off = (long)((uint32_t)R[0] << 16 | R[1]) - (long)time(NULL);
+		time_off = (long)((uint32_t)R[0] << 16 | R[1])
+				- (long)h2g_time(time(NULL));
 		return;
 	case 28: { /* fstat */
 		struct stat st;

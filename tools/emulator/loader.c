@@ -70,6 +70,7 @@ int load_image(const char *path, int argc, char **argv)
 		fread(mem, 1, (size_t)ts + ds, f);
 	}
 	sym_load(f, h);
+	hooks_load();
 	trace_calls_reset();
 	fclose(f);
 
