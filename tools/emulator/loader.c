@@ -69,15 +69,15 @@ int load_image(const char *path, int argc, char **argv)
 	} else {
 		fread(mem, 1, (size_t)ts + ds, f);
 	}
+	sp = (uint16_t)(-nc - argc * 2 - 4);
+	SP = sp;
+	image_end = magic == 0410 ? dbase + ds + bs : (size_t)ts + ds + bs;
+	mem_reset(image_end);
 	sym_load(f, h);
 	hooks_load();
 	trace_calls_reset();
 	fclose(f);
 
-	sp = (uint16_t)(-nc - argc * 2 - 4);
-	SP = sp;
-	image_end = magic == 0410 ? dbase + ds + bs : (size_t)ts + ds + bs;
-	mem_reset(image_end);
 	wrw(sp, argc);
 	ap = sp;
 	c = (uint16_t)-nc;
