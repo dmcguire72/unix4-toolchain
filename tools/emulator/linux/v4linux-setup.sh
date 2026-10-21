@@ -7,6 +7,7 @@ DISPATCH_DEST=/usr/local/libexec/v4linux-dispatch
 GUEST_ROOT=/var/run/v4
 HOST_MOUNT="$GUEST_ROOT/host"
 HOME_MOUNT="$GUEST_ROOT/home"
+TMP_MOUNT="$GUEST_ROOT/tmp"
 STATE_DIR=/var/run/v4-overlay
 UPPER_DIR="$STATE_DIR/upper"
 WORK_DIR="$STATE_DIR/work"
@@ -121,9 +122,20 @@ fi
 
 mount --make-private "$GUEST_ROOT"
 
+install -d -m 1777 "$TMP_MOUNT"
+
+if ! mount -t tmpfs -o mode=1777 tmpfs "$TMP_MOUNT"; then
+    umount "$GUEST_ROOT" || true
+    umount -R "$HOST_STAGING" || true
+    die "failed to mount tmpfs on $TMP_MOUNT"
+fi
+
+mount --make-private "$TMP_MOUNT"
+
 install -d -m 0755 "$HOME_MOUNT"
 
 if ! mount --bind /home "$HOME_MOUNT"; then
+    umount "$TMP_MOUNT" || true
     umount "$GUEST_ROOT" || true
     umount -R "$HOST_STAGING" || true
     die "failed to bind host /home into $GUEST_ROOT/home"
@@ -134,6 +146,8 @@ mount --make-private "$HOME_MOUNT"
 install -d -m 0755 "$HOST_MOUNT"
 
 if ! mount --move "$HOST_STAGING" "$HOST_MOUNT"; then
+    umount "$HOME_MOUNT" || true
+    umount "$TMP_MOUNT" || true
     umount "$GUEST_ROOT" || true
     umount -R "$HOST_STAGING" || true
     die "failed to move host root mount into $HOST_MOUNT"
@@ -164,6 +178,7 @@ V4_DEST=$V4_DEST
 GUEST_ROOT=$GUEST_ROOT
 HOST_MOUNT="$GUEST_ROOT/host"
 HOME_MOUNT="$GUEST_ROOT/home"
+TMP_MOUNT="$GUEST_ROOT/tmp"
 STATE_DIR=$STATE_DIR
 UPPER_DIR="$STATE_DIR/upper"
 WORK_DIR="$STATE_DIR/work"
@@ -184,6 +199,10 @@ mount --make-rslave "\$HOST_STAGING"
 
 mount -t overlay overlay -o "lowerdir=\$V4_DEST,upperdir=\$UPPER_DIR,workdir=\$WORK_DIR" "\$GUEST_ROOT"
 mount --make-private "\$GUEST_ROOT"
+
+install -d -m 1777 "\$TMP_MOUNT"
+mount -t tmpfs -o mode=1777 tmpfs "\$TMP_MOUNT"
+mount --make-private "\$TMP_MOUNT"
 
 install -d -m 0755 "\$HOME_MOUNT"
 mount --bind /home "\$HOME_MOUNT"
@@ -228,6 +247,7 @@ setup complete.
   V4 lower root: $V4_DEST
   Emulator:      $PDP11_DEST/v4linux
   Guest root:    $GUEST_ROOT (/)
+  Guest /tmp:    tmpfs at $TMP_MOUNT
   Host view:     $HOST_MOUNT (/host)
   Home view:     $HOME_MOUNT (/home)
   Dispatcher:    $DISPATCH_DEST

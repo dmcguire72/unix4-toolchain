@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "pdp11.h"
 
 #include <stdlib.h>
@@ -14,11 +15,14 @@
 #include <libgen.h>
 
 #include <pwd.h>
+#include <utmpx.h>
 
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <sys/wait.h>
 #include <sys/times.h>
+#include <sys/syscall.h>
+#include <sys/mman.h>
 
 static int hx_saved[V4_NOFILE], hx_src[V4_NOFILE];
 
@@ -700,15 +704,81 @@ int exec_host_program(const char *path, char **argv)
     return errno;
 }
 
-static int open_v4_utmp(void)
+static inline int is_utmp_path(const char *p)
 {
-    char tmptpl[] = "/tmp/v4utmpXXXXXX";
-    int fd = mkstemp(tmptpl);
-    if (fd < 0) return -1;
-    unlink(tmptpl);
+    if (root[0] != '\0' && strcmp(root, "/") != 0) {
+        char expected[PATH_MAX * 2];
+        snprintf(expected, sizeof expected, "%s/tmp/utmp", root);
+        return strcmp(p, expected) == 0;
+    }
+    return strcmp(p, "/tmp/utmp") == 0;
+}
+
+static char detect_tty_char(int tfd, const struct stat *st)
+{
+    char buf[PATH_MAX];
+
+    const char *tn = ttyname(tfd);
+    if (tn && *tn)
+        return tn[strlen(tn) - 1];
+
+    char fd_path[32];
+    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", tfd);
+    ssize_t len = readlink(fd_path, buf, sizeof(buf) - 1);
+    if (len > 0) {
+        buf[len] = '\0';
+        return buf[len - 1];
+    }
+
+    if (st && S_ISCHR(st->st_mode)) {
+        unsigned int m = minor(st->st_rdev);
+        return (m < 10) ? ('0' + m) : ('a' + (m - 10) % 26);
+    }
+
+    return '0';
+}
+
+static time_t detect_login_time(int tfd, const struct stat *st, const char *user)
+{
+    setutxent();
+    struct utmpx *ut;
+    while ((ut = getutxent()) != NULL) {
+        if (ut->ut_type != USER_PROCESS)
+            continue;
+
+        char user_buf[sizeof(ut->ut_user) + 1];
+        size_t ulen = strnlen(ut->ut_user, sizeof(ut->ut_user));
+        memcpy(user_buf, ut->ut_user, ulen);
+        user_buf[ulen] = '\0';
+
+        if (user && strcmp(user_buf, user) == 0) {
+            time_t t = ut->ut_tv.tv_sec;
+            endutxent();
+            return t;
+        }
+    }
+    endutxent();
+
+    if (tfd >= 0 && st && S_ISCHR(st->st_mode) && st->st_ctime > 0)
+        return st->st_ctime;
+
+    return time(NULL);
+}
+
+static int open_dynamic_utmp(void)
+{
+    int fd = -1;
+#ifdef SYS_memfd_create
+    fd = syscall(SYS_memfd_create, "v4utmp", MFD_CLOEXEC);
+#endif
+    if (fd < 0) {
+        char tmptpl[] = "/tmp/v4utmpXXXXXX";
+        fd = mkstemp(tmptpl);
+        if (fd < 0) return -1;
+        unlink(tmptpl);
+    }
 
     uint8_t entry[16] = {0};
-
     const char *user = getenv("USER");
     if (!user) {
         struct passwd *pw = getpwuid(getuid());
@@ -717,36 +787,26 @@ static int open_v4_utmp(void)
     if (!user) user = "user";
     strncpy((char *)entry, user, 8);
 
-    char tty_char = '0';
-    char *tname = ttyname(0);
-    if (!tname) tname = ttyname(1);
-    if (tname) {
-        size_t tlen = strlen(tname);
-        if (tlen > 0)
-            tty_char = tname[tlen - 1];
-    }
-    entry[8] = tty_char;
+    int tfd = isatty(0) ? 0 : isatty(1) ? 1 : isatty(2) ? 2 : -1;
+    struct stat st;
+    int have_stat = (tfd >= 0 && fstat(tfd, &st) == 0);
+
+    entry[8] = (tfd >= 0) ? detect_tty_char(tfd, have_stat ? &st : NULL) : '0';
     entry[9] = 0;
 
-    uint32_t now = guest_now();
-    uint16_t hi = (uint16_t)(now >> 16);
-    uint16_t lo = (uint16_t)(now & 0xffff);
+    time_t login_time = detect_login_time(tfd, have_stat ? &st : NULL, user);
 
-    entry[10] = hi & 0xff;
-    entry[11] = hi >> 8;
-    entry[12] = lo & 0xff;
-    entry[13] = lo >> 8;
+    uint32_t gtime = h2g_time(login_time);
+    entry[10] = (gtime >> 16) & 0xff;
+    entry[11] = (gtime >> 24) & 0xff;
+    entry[12] = gtime & 0xff;
+    entry[13] = (gtime >> 8) & 0xff;
 
-    entry[14] = 0;
-    entry[15] = 0;
-
-    if (write(fd, entry, 16) != 16) {
+    if (write(fd, entry, sizeof entry) != sizeof entry) {
         close(fd);
         return -1;
     }
-
     lseek(fd, 0, SEEK_SET);
-	tnote("synthesized /tmp/utmp from host env");
     return fd;
 }
 
@@ -811,11 +871,9 @@ static void do_sys(int n, uint16_t *a)
 		return;
 	case 5: { /* open */
 		struct stat st;
-
 		mappath(a[0], p);
-
-		if (ends_with(p, "/tmp/utmp")) {
-			r = open_v4_utmp();
+		if (is_utmp_path(p) && a[1] == 0) {
+			r = open_dynamic_utmp();
 			st.st_mode = 0;
 		} else if (stat(p, &st) == 0 && S_ISDIR(st.st_mode)) {
 			if (a[1] != 0) { seterr(V4_EISDIR); return; }
@@ -1104,8 +1162,18 @@ static void do_sys(int n, uint16_t *a)
 	}
 	case 18: { /* stat */
 		struct stat st;
-
 		mappath(a[0], p);
+		if (is_utmp_path(p)) {
+			memset(&st, 0, sizeof st);
+			st.st_mode = S_IFREG | 0644;
+			st.st_nlink = 1;
+			st.st_uid = getuid();
+			st.st_gid = getgid();
+			st.st_size = 16;
+			st.st_atime = st.st_mtime = time(NULL);
+			putstat(a[1], &st, 16);
+			return;
+		}
 		if (stat(p, &st) < 0) { hosterr(); return; }
 		putstat(a[1], &st, S_ISDIR(st.st_mode) ? dir_size(p) : st.st_size);
 		return;

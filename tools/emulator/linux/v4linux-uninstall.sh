@@ -7,6 +7,7 @@ DISPATCH_DEST=/usr/local/libexec/v4linux-dispatch
 GUEST_ROOT=/var/run/v4
 HOST_MOUNT="$GUEST_ROOT/host"
 HOME_MOUNT="$GUEST_ROOT/home"
+TMP_MOUNT="$GUEST_ROOT/tmp"
 STATE_DIR=/var/run/v4-overlay
 HOST_STAGING=/var/run/v4-host-staging
 BINFMT_DIR=/proc/sys/fs/binfmt_misc
@@ -64,6 +65,10 @@ fi
 
 if mountpoint -q "$HOME_MOUNT"; then
     umount -R -- "$HOME_MOUNT"
+fi
+
+if mountpoint -q "$TMP_MOUNT"; then
+    umount -R -- "$TMP_MOUNT"
 fi
 
 if mountpoint -q "$GUEST_ROOT"; then
