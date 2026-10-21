@@ -1,3 +1,11 @@
+#
+/* 
+ * modern alloc functions for unix v4 userspace.
+ * copyright 2026 daniel mcguire.
+ * 
+ * requires unmodified CC from unix v4 to compile:
+ * cc allocator.c YOURFILE.c
+ */
 #define MINBLK	4
 #define CHUNK	1024
 #define KEEP	512
@@ -206,20 +214,29 @@ int n;
 	return(p);
 }
 
-char *calloc(n, size)
+char *
+calloc(n, size)
 int n, size;
 {
 	register char *p;
 	register int i;
+	int total;
 
-	i = n * size;
-	if (n > 0 && i / n != size)
+	if (n <= 0 || size <= 0)
 		return(0);
-	p = malloc(i);
+
+	if (n > MAXREQ / size)
+		return(0);
+
+	total = n * size;
+
+	p = malloc(total);
 	if (p == 0)
 		return(0);
-	while (i > 0)
-		p[--i] = 0;
+
+	for (i = 0; i < total; i++)
+		p[i] = 0;
+
 	return(p);
 }
 
