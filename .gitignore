@@ -3,4 +3,5 @@
 /bin
 /v4dbg
 example/*.o
+example/bin
 a.out
