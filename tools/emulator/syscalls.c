@@ -287,6 +287,62 @@ static void hosterr(void)
 	seterr(v4errno(errno));
 }
 
+static int copy_across_devices(const char *src, const char *dst)
+{
+	struct stat st;
+	char buf[8192];
+	int in, out, saved;
+	ssize_t n;
+
+	in = open(src, O_RDONLY);
+	if (in < 0) return -1;
+	if (fstat(in, &st) < 0 || !S_ISREG(st.st_mode)) {
+		saved = S_ISREG(st.st_mode) ? errno : EPERM;
+		close(in);
+		errno = saved;
+		return -1;
+	}
+	out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0600);
+	if (out < 0) {
+		saved = errno;
+		close(in);
+		errno = saved;
+		return -1;
+	}
+	while ((n = read(in, buf, sizeof buf)) != 0) {
+		char *w = buf;
+
+		if (n < 0) {
+			if (errno == EINTR) continue;
+			goto fail;
+		}
+		while (n > 0) {
+			ssize_t k = write(out, w, n);
+
+			if (k < 0) {
+				if (errno == EINTR) continue;
+				goto fail;
+			}
+			w += k;
+			n -= k;
+		}
+	}
+	fchmod(out, st.st_mode & 07777);
+	if (close(out) < 0) {
+		out = -1;
+		goto fail;
+	}
+	close(in);
+	return 0;
+fail:
+	saved = errno;
+	if (out >= 0) close(out);
+	close(in);
+	unlink(dst);
+	errno = saved;
+	return -1;
+}
+
 static struct stat dirst[16];
 static char fisdir[16];
 
@@ -837,7 +893,13 @@ static void do_sys(int n, uint16_t *a)
 			else if (!S_ISDIR(st.st_mode)) seterr(1);
 			return;
 		}
-		if (link(p, q) < 0) hosterr();
+		if (link(p, q) < 0) {
+			if (errno == EXDEV) {
+				tnote("link: EXDEV, falling back to copy");
+				if (copy_across_devices(p, q) == 0) return;
+			}
+			hosterr();
+		}
 		return;
 	}
 	case 10: { /* unlink */
