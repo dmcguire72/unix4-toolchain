@@ -3,8 +3,8 @@
 This repository contains a few components:
 
 - A. CC for Linux (targetting Unix v4 for the PDP-11)
-- B. AS for Linux (targetting Unix v4 for the PDP-11)
-- C. LD for Linux (targetting Unix v4 for the PDP-11)
+- B. AS for Linux (targetting Unix v4 for the PDP-11) [soon]
+- C. LD for Linux (targetting Unix v4 for the PDP-11) [soon, after LD]
 - D. A Unix v4 userspace emulation component using binfmt_misc, syscall translation, and a minimal PDP-11 CPU/FPU emulator.
 
 ## A. CC
@@ -81,13 +81,21 @@ I will port LD after AS.
 
 ## D. Userspace emulator
 
+The userspace emulator translates Unix V4 syscalls to POSIX, and handles host integrations.
+
+Like any other executable format, do not trust unknown PDP-11 a.out executables or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
+
 ### Setting up the emulator
 
 To get started:
 
 ```bash
 mkdir -p v4
-wget https://danielm.pages.dev/useful/unix_v4.tar.xz
+# https://danielm.pages.dev/useful/unix_v4_debug.tar.xz contains 
+# unstripped symbol rebuilds of many binaries. Symbols allow both hook 
+# based patches to work, and for more readable stacktraces in most 
+# cases of failure. The URL below contains the original image, modified 
+# only to remove root nesting.
 curl -fL https://danielm.pages.dev/useful/unix_v4.tar.xz -o /tmp/unix_v4.tar.xz
 tar -xJf /tmp/unix_v4.tar.xz -C ./v4
 make emulator
