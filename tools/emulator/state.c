@@ -1,6 +1,6 @@
 #include "pdp11.h"
 
-uint8_t mem[65536];
+uint8_t mem[V4_MEM_LOGICAL];
 uint16_t R[8];
 int fN, fZ, fV, fC;
 const char *root = "";

@@ -6,8 +6,6 @@
 #include <setjmp.h>
 #include <signal.h>
 
-#define V4_NOFILE	15
-#define V4_NSIG		13
 #define V4_SIGHUP	1
 #define V4_SIGINT	2
 #define V4_SIGQIT	3
@@ -21,7 +19,47 @@
 #define V4_SIGSEG	11
 #define V4_SIGSYS	12
 
-extern uint8_t mem[65536];
+// @TODO update these to match public docs
+#define V4_EPERM    1   /* Not owner */
+#define V4_ENOENT   2   /* No such file or directory */
+#define V4_ESRCH    3   /* No such process */
+#define V4_EIO      5   /* I/O error */
+#define V4_ENXIO    6   /* No such device or address */
+#define V4_E2BIG    7   /* Arg list too long */
+#define V4_ENOEXEC  8   /* Exec format error */
+#define V4_EBADF    9   /* Bad file number */
+#define V4_ECHILD   10  /* No children */
+#define V4_EAGAIN   11  /* No more processes */
+#define V4_ENOMEM   12  /* Not enough core */
+#define V4_EACCES   13  /* Permission denied */
+#define V4_EFAULT   14  /* Bad address */
+#define V4_ENOTBLK  15  /* Block device required */
+#define V4_EBUSY    16  /* Mount device busy */
+#define V4_EEXIST   17  /* File exists */
+#define V4_EXDEV    18  /* Cross-device link */
+#define V4_ENODEV   19  /* No such device */
+#define V4_ENOTDIR  20  /* Not a directory */
+#define V4_EISDIR   21  /* Is a directory */
+#define V4_EINVAL   22  /* Invalid argument */
+#define V4_ENFILE   23  /* File table overflow */
+#define V4_EMFILE   24  /* Too many open files */
+#define V4_ENOTTY   25  /* Not a typewriter */
+#define V4_ETXTBSY  26  /* Text file busy */
+#define V4_EFBIG    27  /* File too large */
+#define V4_ENOSPC   28  /* No space left on device */
+#define V4_ESPIPE   29  /* Illegal seek */
+#define V4_EROFS    30  /* Read-only file system */
+#define V4_ENOSYS   100 /* Bad system call */
+
+#define V4_AOUT_OMAGIC  0407
+#define V4_AOUT_NMAGIC  0410
+#define V4_MAX_ARGS_LEN 510
+#define V4_MEM_MAX      0160000
+#define V4_MEM_LOGICAL  0200000
+#define V4_NOFILE	    15
+#define V4_NSIG		    13
+
+extern uint8_t mem[V4_MEM_LOGICAL];
 extern uint16_t R[8];
 extern int fN, fZ, fV, fC;
 extern const char *root;

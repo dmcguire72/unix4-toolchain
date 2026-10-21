@@ -276,9 +276,9 @@ static int v4errno(int e)
 {
 	if (e >= 1 && e <= 30 && e != EINTR && e != EFAULT) return e;
 	switch (e) {
-	case ENOTEMPTY: return 16;
-	case ENAMETOOLONG: case ELOOP: return 2;
-	default: return 5;
+	case ENOTEMPTY: return V4_EBUSY;
+	case ENAMETOOLONG: case ELOOP: return V4_ENOENT;
+	default: return V4_EIO;
 	}
 }
 
@@ -349,7 +349,7 @@ static char fisdir[16];
 static int hostfd(int fd)
 {
 	if (fd < 0 || fd >= V4_NOFILE || fdtab[fd] < 0) {
-		seterr(9);
+		seterr(V4_EBADF);
 		return -1;
 	}
 	return fdtab[fd];
@@ -460,7 +460,7 @@ static uint8_t map_gid(gid_t g)
 static int suser(void)
 {
 	if (g_uid == 0) return 1;
-	seterr(1);
+	seterr(V4_EPERM);
 	return 0;
 }
 
@@ -642,7 +642,7 @@ static void rawpath(uint16_t a, char *out)
 
 static void sys_nosys(void)
 {
-	if (sigtab[V4_SIGSYS] & 1) { seterr(100); return; }
+	if (sigtab[V4_SIGSYS] & 1) { seterr(V4_ENOSYS); return; }
 	trap_sig(V4_SIGSYS);
 }
 
@@ -763,7 +763,7 @@ static void do_sys(int n, uint16_t *a)
 	case 1: /* exit */
 		exit(R[0] & 0377);
 	case 2: { /* fork */
-		if (nkids >= MAXKIDS) { seterr(11); return; }
+		if (nkids >= MAXKIDS) { seterr(V4_EAGAIN); return; }
 		fflush(NULL);
 		r = fork();
 		if (r < 0) { hosterr(); return; }
@@ -791,7 +791,7 @@ static void do_sys(int n, uint16_t *a)
 	case 3: /* read */
 		h = hostfd(R[0]);
 		if (h < 0) return;
-		if ((uint32_t)a[0] + a[1] > 65536) a[1] = 65536 - a[0];
+		if ((uint32_t)a[0] + a[1] > V4_MEM_LOGICAL) a[1] = V4_MEM_LOGICAL - a[0];
 		r = read(h, mem + a[0], a[1]);
 		if (r < 0) {
 			if (errno == EINTR) return;
@@ -801,7 +801,7 @@ static void do_sys(int n, uint16_t *a)
 	case 4: /* write */
 		h = hostfd(R[0]);
 		if (h < 0) return;
-		if ((uint32_t)a[0] + a[1] > 65536) a[1] = 65536 - a[0];
+		if ((uint32_t)a[0] + a[1] > V4_MEM_LOGICAL) a[1] = V4_MEM_LOGICAL - a[0];
 		r = write(h, mem + a[0], a[1]);
 		if (r < 0) {
 			if (errno == EINTR) return;
@@ -818,7 +818,7 @@ static void do_sys(int n, uint16_t *a)
 			r = open_v4_utmp();
 			st.st_mode = 0;
 		} else if (stat(p, &st) == 0 && S_ISDIR(st.st_mode)) {
-			if (a[1] != 0) { seterr(21); return; }	/* EISDIR */
+			if (a[1] != 0) { seterr(V4_EISDIR); return; }
 			r = open_v4_dir(p);
 		} else {
 			r = open(p, a[1] == 0 ? O_RDONLY : a[1] == 1 ? O_WRONLY : O_RDWR);
@@ -826,7 +826,7 @@ static void do_sys(int n, uint16_t *a)
 		}
 		if (r < 0) { hosterr(); return; }
 		fd = allocfd(r);
-		if (fd < 0) { seterr(24); return; }
+		if (fd < 0) { seterr(V4_EMFILE); return; }
 		if (S_ISDIR(st.st_mode)) {
 			fisdir[fd] = 1;
 			dirst[fd] = st;
@@ -849,7 +849,7 @@ static void do_sys(int n, uint16_t *a)
 		r = wait(&st);
 		if (r < 0) {
 			if (errno == EINTR) return;
-			seterr(10);
+			seterr(V4_ECHILD);
 			return;
 		}
 		reap_kid(r, &g);
@@ -875,7 +875,7 @@ static void do_sys(int n, uint16_t *a)
 		}
 		if (r < 0) { hosterr(); return; }
 		fd = allocfd(r);
-		if (fd < 0) seterr(24); else R[0] = fd;
+		if (fd < 0) seterr(V4_EMFILE); else R[0] = fd;
 		return;
 	}
 	case 9: { /* link */
@@ -890,7 +890,7 @@ static void do_sys(int n, uint16_t *a)
 		if (is_dot_entry(raw)) {
 			tnote("no-op: host directories already have . and ..");
 			if (stat(p, &st) < 0) hosterr();
-			else if (!S_ISDIR(st.st_mode)) seterr(1);
+			else if (!S_ISDIR(st.st_mode)) seterr(V4_EPERM);
 			return;
 		}
 		if (link(p, q) < 0) {
@@ -931,16 +931,16 @@ static void do_sys(int n, uint16_t *a)
 		rawpath(a[0], original_guest_path);
 		
 		while ((s = rdw(ap)) != 0) {
-			if (s == 0177777) { seterr(14); return; }
+			if (s == 0177777) { seterr(V4_EFAULT); return; }
 			av[na++] = strs + nc;
 			for (;;) {
 				char c = mem[s++];
-				if (nc > 510) { seterr(7); return; }
+				if (nc > V4_MAX_ARGS_LEN) { seterr(V4_E2BIG); return; }
 				strs[nc++] = c;
 				if (!c) break;
 			}
 			ap += 2;
-			if (na >= 259) { seterr(7); return; }
+			if (na >= 259) { seterr(V4_E2BIG); return; }
 		}
 
 		if (stop_at_exec) {
@@ -958,7 +958,7 @@ static void do_sys(int n, uint16_t *a)
 			return;
 		}
 
-		if (load_errno == 8 || load_errno == 2) {
+		if (load_errno == V4_ENOEXEC || load_errno == V4_ENOENT) {
 			if (root[0] != '\0' && strchr(original_guest_path, '/') == NULL) {
 				static const char *gdirs[] = { "/bin/", "/usr/bin/" };
 				const char *rt = strcmp(root, "/") == 0 ? "" : root;
@@ -1025,7 +1025,7 @@ static void do_sys(int n, uint16_t *a)
 		struct stat st;
 
 		mappath(a[0], p);
-		if (stat(p, &st) == 0 && !S_ISDIR(st.st_mode)) { seterr(20); return; }
+		if (stat(p, &st) == 0 && !S_ISDIR(st.st_mode)) { seterr(V4_ENOTDIR); return; }
 		if (chdir(p) < 0) { hosterr(); return; }
 		if (root[0] != '\0' && strcmp(root, "/") != 0) {
 			char cwd[PATH_MAX];
@@ -1094,7 +1094,7 @@ static void do_sys(int n, uint16_t *a)
 		uint32_t end = ((uint32_t)a[0] + 63) & ~63u;
 
 		if (end > ((uint32_t)SP & ~63u) && a[0] != 0) {
-			seterr(12);
+			seterr(V4_ENOMEM);
 			return;
 		}
 		if (a[0] != 0)
@@ -1126,9 +1126,9 @@ static void do_sys(int n, uint16_t *a)
 
 		mappath(a[0], p);
 		if (stat(p, &st) < 0) { hosterr(); return; }
-		if (!S_ISBLK(st.st_mode)) { seterr(15); return; }	/* ENOTBLK */
+		if (!S_ISBLK(st.st_mode)) { seterr(V4_ENOTBLK); return; }
 		tnote("host block device has no v4 driver");
-		seterr(6);	/* ENXIO: no such block driver in this machine */
+		seterr(V4_ENXIO);
 		return;
 	}
 	case 22: { /* umount(special) */
@@ -1136,9 +1136,9 @@ static void do_sys(int n, uint16_t *a)
 
 		mappath(a[0], p);
 		if (stat(p, &st) < 0) { hosterr(); return; }
-		if (!S_ISBLK(st.st_mode)) { seterr(15); return; }
+		if (!S_ISBLK(st.st_mode)) { seterr(V4_ENOTBLK); return; }
 		tnote("nothing is ever mounted");
-		seterr(22);	/* EINVAL */
+		seterr(V4_EINVAL);
 		return;
 	}
 	case 23: /* setuid */
@@ -1174,14 +1174,14 @@ static void do_sys(int n, uint16_t *a)
 	case 31: /* stty(fd, buf) */
 		h = hostfd(R[0]);
 		if (h < 0) return;
-		if (!isatty(h)) { seterr(25); return; }
+		if (!isatty(h)) { seterr(V4_ENOTTY); return; }
 		tnote("flags applied to host termios (echo/raw/crmod)");
 		tty_set_flags(h, rdw(a[0] + 4));
 		return;
 	case 32: /* gtty(fd, buf) */
 		h = hostfd(R[0]);
 		if (h < 0) return;
-		if (!isatty(h)) { seterr(25); return; }
+		if (!isatty(h)) { seterr(V4_ENOTTY); return; }
 		wrw(a[0] + 0, 0);
 		wrw(a[0] + 2, ('@' << 8) | '#');
 		wrw(a[0] + 4, tty_get_flags(h));
@@ -1206,14 +1206,14 @@ static void do_sys(int n, uint16_t *a)
 		int hs;
 
 		hp = resolve_pid(R[0]);
-		if (!hp) { seterr(3); return; }
+		if (!hp) { seterr(V4_ESRCH); return; }
 		if (a[0] == 0 || a[0] >= V4_NSIG) return;
 		hs = guest_to_host_sig(a[0]);
 		if (hp == getpid()) {
 			sig_pending |= 1 << a[0];
 			return;
 		}
-		if (kill(hp, hs) < 0) seterr(errno == ESRCH ? 3 : 1);
+		if (kill(hp, hs) < 0) seterr(errno == ESRCH ? V4_ESRCH : V4_EPERM);
 		return;
 	}
 	case 38: /* getswit */
@@ -1224,9 +1224,9 @@ static void do_sys(int n, uint16_t *a)
 		h = hostfd(fd);
 		if (h < 0) return;
 		r = dup(h);
-		if (r < 0) { seterr(24); return; }
+		if (r < 0) { seterr(V4_EMFILE); return; }
 		i = allocfd(r);
-		if (i < 0) { seterr(24); return; }
+		if (i < 0) { seterr(V4_EMFILE); return; }
 		fisdir[i] = fisdir[fd];
 		dirst[i] = dirst[fd];
 		R[0] = i;
@@ -1234,14 +1234,14 @@ static void do_sys(int n, uint16_t *a)
 	case 42: { /* pipe: R0 = read, R1 = write */
 		int pfd[2], fd0, fd1;
 
-		if (pipe(pfd) < 0) { seterr(23); return; }
+		if (pipe(pfd) < 0) { seterr(V4_ENFILE); return; }
 		fd0 = allocfd(pfd[0]);
-		if (fd0 < 0) { close(pfd[1]); seterr(24); return; }
+		if (fd0 < 0) { close(pfd[1]); seterr(V4_EMFILE); return; }
 		fd1 = allocfd(pfd[1]);
 		if (fd1 < 0) {
 			closehost(fdtab[fd0]);
 			fdtab[fd0] = -1;
-			seterr(24);
+			seterr(V4_EMFILE);
 			return;
 		}
 		R[0] = fd0;
@@ -1283,7 +1283,7 @@ static void do_sys(int n, uint16_t *a)
 	case 48: { /* sig(signum, handler) */
 		int s = a[0];
 
-		if (s <= 0 || s >= V4_NSIG) { seterr(22); return; }
+		if (s <= 0 || s >= V4_NSIG) { seterr(V4_EINVAL); return; }
 		R[0] = sigtab[s];
 		sigtab[s] = a[1];
 		sigtab[V4_SIGKIL] = 0;

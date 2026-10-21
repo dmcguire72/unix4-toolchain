@@ -41,7 +41,7 @@ int has_valid_magic(const char *path)
 
     magic = h[0] | ((unsigned int)h[1] << 8);
 
-    return magic == 0407 || magic == 0410;
+    return magic == V4_AOUT_OMAGIC || magic == V4_AOUT_NMAGIC;
 }
 
 static int path_is_inside_root(const char *path)

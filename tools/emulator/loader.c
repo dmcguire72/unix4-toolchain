@@ -15,55 +15,55 @@ int load_image(const char *path, int argc, char **argv)
 	size_t dbase = 0, image_end;
 
 	if (stat(path, &st) < 0) {
-		load_errno = errno == ENOENT || errno == ENAMETOOLONG ? 2 :
-		    errno == ENOTDIR ? 20 : 13;
+		load_errno = (errno == ENOENT || errno == ENAMETOOLONG) ? V4_ENOENT :
+		             (errno == ENOTDIR) ? V4_ENOTDIR : V4_EACCES;
 		return -1;
 	}
 	if (!S_ISREG(st.st_mode)) {
-		load_errno = 13;
+		load_errno = V4_EACCES;
 		return -1;
 	}
 	f = fopen(path, "rb");
 	if (!f) {
-		load_errno = 13;
+		load_errno = V4_EACCES;
 		return -1;
 	}
 	if (fread(h, 1, 16, f) != 16) {
 		fclose(f);
-		load_errno = 8;
+		load_errno = V4_ENOEXEC;
 		return -1;
 	}
 	magic = h[0] | h[1] << 8;
 	ts = h[2] | h[3] << 8;
 	ds = h[4] | h[5] << 8;
 	bs = h[6] | h[7] << 8;
-	if (magic != 0407 && magic != 0410) {
+	if (magic != V4_AOUT_OMAGIC && magic != V4_AOUT_NMAGIC) {
 		fclose(f);
-		load_errno = 8;
+		load_errno = V4_ENOEXEC;
 		return -1;
 	}
-	if (magic == 0410) {
+	if (magic == V4_AOUT_NMAGIC) {
 		dbase = ((size_t)ts + 8191) & ~(size_t)8191;
-		if (dbase + ds + bs > 0160000) {
+		if (dbase + ds + bs > V4_MEM_MAX) {
 			fclose(f);
-			load_errno = 12;
+			load_errno = V4_ENOMEM;
 			return -1;
 		}
-	} else if ((size_t)ts + ds + bs > 0160000) {
+	} else if ((size_t)ts + ds + bs > V4_MEM_MAX) {
 		fclose(f);
-		load_errno = 12;
+		load_errno = V4_ENOMEM;
 		return -1;
 	}
 	for (i = 0; i < argc; i++) nc += strlen(argv[i]) + 1;
 	if (nc & 1) nc++;
-	if (nc > 510 + 1) {
+	if (nc > V4_MAX_ARGS_LEN + 1) {
 		fclose(f);
-		load_errno = 7;
+		load_errno = V4_E2BIG;
 		return -1;
 	}
 
 	memset(mem, 0, sizeof mem);
-	if (magic == 0410) {
+	if (magic == V4_AOUT_NMAGIC) {
 		fread(mem, 1, ts, f);
 		fread(mem + dbase, 1, ds, f);
 	} else {
@@ -71,7 +71,7 @@ int load_image(const char *path, int argc, char **argv)
 	}
 	sp = (uint16_t)(-nc - argc * 2 - 4);
 	SP = sp;
-	image_end = magic == 0410 ? dbase + ds + bs : (size_t)ts + ds + bs;
+	image_end = (magic == V4_AOUT_NMAGIC) ? dbase + ds + bs : (size_t)ts + ds + bs;
 	mem_reset(image_end);
 	sym_load(f, h);
 	hooks_load();
