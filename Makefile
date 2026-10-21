@@ -27,7 +27,20 @@ EMULATOR_SRC = \
 
 EMULATOR_HDR = tools/emulator/pdp11.h
 
-emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch
+DISASM_SRC = \
+    tools/emulator/v4dis.c \
+    tools/emulator/state.c \
+    tools/emulator/memory.c \
+    tools/emulator/loader.c \
+    tools/emulator/trace.c \
+    tools/emulator/symbols.c \
+    tools/emulator/syscalls.c \
+    tools/emulator/signals.c \
+    tools/emulator/fpu.c \
+	tools/emulator/cpu.c \
+    tools/emulator/hooks.c
+
+emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis
 all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 emulator
 
 $(BIN) $(BLD):
@@ -50,6 +63,9 @@ $(BIN)/cc11: $(SRC)/cc11.c | $(BIN)
 
 $(BIN)/v4linux: $(EMULATOR_SRC) $(EMULATOR_HDR) | $(BIN)
 	$(CC) $(CFLAGS) -Itools/emulator -o $@ $(EMULATOR_SRC) -lm
+
+$(BIN)/v4dis: $(DISASM_SRC) $(EMULATOR_HDR) | $(BIN)
+	$(CC) $(CFLAGS) -Itools/emulator -o $@ $(DISASM_SRC) -lm
 
 $(BIN)/v4linux-dispatch: tools/emulator/linux/v4linux-dispatch.c | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $<
