@@ -19,7 +19,7 @@
 #define V4_SIGSEG	11
 #define V4_SIGSYS	12
 
-// @TODO update these to match public docs
+// @TODO update these comments to match public docs
 #define V4_EPERM    1   /* Not owner */
 #define V4_ENOENT   2   /* No such file or directory */
 #define V4_ESRCH    3   /* No such process */

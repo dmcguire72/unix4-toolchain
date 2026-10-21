@@ -80,7 +80,7 @@ static void v4_alias(const char *name, char out[15])
 	snprintf(out + plen, 15 - plen, "~%06x%s", (unsigned)h, ext);
 }
 
-static int looks_like_alias(const char *c)
+static inline int looks_like_alias(const char *c)
 {
 	const char *t = strchr(c, '~');
 	size_t i;
@@ -139,7 +139,7 @@ static void unalias_path(char *path)
 	snprintf(path, PATH_MAX * 2, "%s", out);
 }
 
-static void time_shift_init(void)
+static inline void time_shift_init(void)
 {
 	const char *e = getenv("V4LINUX_TIME_SHIFT_YEARS");
 
@@ -155,7 +155,7 @@ long guest_time_shift(void)
 	return time_shift;
 }
 
-static long tz_compensation(time_t t)
+static inline long tz_compensation(time_t t)
 {
 	struct tm tm;
 
@@ -164,12 +164,12 @@ static long tz_compensation(time_t t)
 	return tm.tm_gmtoff - V4_FIXED_OFFSET;
 }
 
-static uint32_t h2g_time(time_t t)
+static inline uint32_t h2g_time(time_t t)
 {
 	return (uint32_t)(t - time_shift + tz_compensation(t));
 }
 
-static uint32_t guest_now(void)
+static inline uint32_t guest_now(void)
 {
 	return h2g_time(time(NULL)) + (uint32_t)time_off;
 }
@@ -266,13 +266,13 @@ void mappath(uint16_t a, char *out)
 	unalias_path(out);
 }
 
-static void seterr(int e)
+static inline void seterr(int e)
 {
 	fC = 1;
 	R[0] = e;
 }
 
-static int v4errno(int e)
+static inline int v4errno(int e)
 {
 	if (e >= 1 && e <= 30 && e != EINTR && e != EFAULT) return e;
 	switch (e) {
@@ -282,12 +282,12 @@ static int v4errno(int e)
 	}
 }
 
-static void hosterr(void)
+static inline void hosterr(void)
 {
 	seterr(v4errno(errno));
 }
 
-static int copy_across_devices(const char *src, const char *dst)
+static inline int copy_across_devices(const char *src, const char *dst)
 {
 	struct stat st;
 	char buf[8192];
@@ -346,7 +346,7 @@ fail:
 static struct stat dirst[16];
 static char fisdir[16];
 
-static int hostfd(int fd)
+static inline int hostfd(int fd)
 {
 	if (fd < 0 || fd >= V4_NOFILE || fdtab[fd] < 0) {
 		seterr(V4_EBADF);
@@ -355,7 +355,7 @@ static int hostfd(int fd)
 	return fdtab[fd];
 }
 
-static int allocfd(int h)
+static inline int allocfd(int h)
 {
 	int i;
 
@@ -370,12 +370,12 @@ static int allocfd(int h)
 	return -1;
 }
 
-static void closehost(int h)
+static inline void closehost(int h)
 {
 	if (h > 2) close(h);
 }
 
-static uint16_t ino16(ino_t i)
+static inline uint16_t ino16(ino_t i)
 {
 	uint16_t v = (uint16_t)(i ^ (i >> 16));
 
@@ -435,7 +435,7 @@ static int open_v4_dir(const char *path)
     lseek(fd, 0, SEEK_SET);
     return fd;
 }
-static long dir_size(const char *path)
+static inline long dir_size(const char *path)
 {
 	DIR *d = opendir(path);
 	struct dirent *e;
@@ -447,24 +447,24 @@ static long dir_size(const char *path)
 	return n * 16;
 }
 
-static uint8_t map_uid(uid_t u)
+static inline uint8_t map_uid(uid_t u)
 {
 	return (uint8_t)u;
 }
 
-static uint8_t map_gid(gid_t g)
+static inline uint8_t map_gid(gid_t g)
 {
 	return (uint8_t)g;
 }
 
-static int suser(void)
+static inline int suser(void)
 {
 	if (g_uid == 0) return 1;
 	seterr(V4_EPERM);
 	return 0;
 }
 
-static int gpid_used(uint16_t g)
+static inline int gpid_used(uint16_t g)
 {
 	int i;
 
@@ -474,7 +474,7 @@ static int gpid_used(uint16_t g)
 	return 0;
 }
 
-static uint16_t new_gpid(pid_t h, int commit)
+static inline uint16_t new_gpid(pid_t h, int commit)
 {
 	if (h > 1 && h <= 65535 && !gpid_used((uint16_t)h))
 		return (uint16_t)h;
@@ -503,7 +503,7 @@ void syscalls_init(void)
 	g_rgid = (uint8_t)getgid();
 }
 
-static int proc_is_us(pid_t p)
+static inline int proc_is_us(pid_t p)
 {
 	char a[64], b[PATH_MAX], c[PATH_MAX];
 	ssize_t n1, n2;
@@ -514,7 +514,7 @@ static int proc_is_us(pid_t p)
 	return n1 > 0 && n1 == n2 && memcmp(b, c, n1) == 0;
 }
 
-static pid_t resolve_pid(uint16_t g)
+static inline pid_t resolve_pid(uint16_t g)
 {
 	int i;
 
@@ -526,7 +526,7 @@ static pid_t resolve_pid(uint16_t g)
 	return 0;
 }
 
-static void reap_kid(pid_t h, uint16_t *g)
+static inline void reap_kid(pid_t h, uint16_t *g)
 {
 	int i;
 
@@ -540,7 +540,7 @@ static void reap_kid(pid_t h, uint16_t *g)
 	}
 }
 
-static void put16(uint16_t base, int off, uint16_t v)
+static inline void put16(uint16_t base, int off, uint16_t v)
 {
 	mem[(uint16_t)(base + off)] = v;
 	mem[(uint16_t)(base + off + 1)] = v >> 8;
@@ -581,7 +581,7 @@ void tty_restore(void)
 	if (tty_saved) tcsetattr(tty_fd, TCSANOW, &tty_orig);
 }
 
-static uint16_t tty_get_flags(int h)
+static inline uint16_t tty_get_flags(int h)
 {
 	struct termios t;
 	uint16_t f = 0;
@@ -593,7 +593,7 @@ static uint16_t tty_get_flags(int h)
 	return f;
 }
 
-static void tty_set_flags(int h, uint16_t f)
+static inline void tty_set_flags(int h, uint16_t f)
 {
 	struct termios t;
 
@@ -616,20 +616,20 @@ static void tty_set_flags(int h, uint16_t f)
 	tcsetattr(h, TCSANOW, &t);
 }
 
-static int ends_with(const char *p, const char *suf)
+static inline int ends_with(const char *p, const char *suf)
 {
 	size_t a = strlen(p), b = strlen(suf);
 
 	return a >= b && !strcmp(p + a - b, suf);
 }
 
-static int is_dot_entry(const char *p)
+static inline int is_dot_entry(const char *p)
 {
 	return !strcmp(p, ".") || !strcmp(p, "..") ||
 	    ends_with(p, "/.") || ends_with(p, "/..");
 }
 
-static void rawpath(uint16_t a, char *out)
+static inline void rawpath(uint16_t a, char *out)
 {
 	int i = 0;
 
@@ -640,13 +640,13 @@ static void rawpath(uint16_t a, char *out)
 	out[i] = 0;
 }
 
-static void sys_nosys(void)
+static inline void sys_nosys(void)
 {
 	if (sigtab[V4_SIGSYS] & 1) { seterr(V4_ENOSYS); return; }
 	trap_sig(V4_SIGSYS);
 }
 
-static void host_fds_install(void)
+static inline void host_fds_install(void)
 {
 	int i;
 
@@ -661,7 +661,7 @@ static void host_fds_install(void)
 	}
 }
 
-static void host_fds_restore(void)
+static inline void host_fds_restore(void)
 {
 	int i, e = errno;
 
@@ -677,7 +677,7 @@ static void host_fds_restore(void)
 	errno = e;
 }
 
-static const char *host_view_path(const char *p)
+static inline const char *host_view_path(const char *p)
 {
 	char pre[PATH_MAX];
 	size_t n;
