@@ -1,5 +1,5 @@
 CC	= cc
-CFLAGS	= -std=gnu11 -O2 -Wall -Wno-unused-result
+CFLAGS	= -std=gnu11 -O3 -Wall -Wno-unused-result
 SRC	= src
 BLD	= build
 BIN	= bin
@@ -27,8 +27,8 @@ EMULATOR_SRC = \
 
 EMULATOR_HDR = tools/emulator/pdp11.h
 
-all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11
 emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch
+all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 emulator
 
 $(BIN) $(BLD):
 	mkdir -p $@
