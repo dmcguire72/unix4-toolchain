@@ -9,11 +9,19 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <limits.h>
 
-static const char *PDP11 = "/opt/v4/bin/v4linux";
-static const char *GUEST_ROOT = "/var/run/v4";
-static const char *HOST_MOUNT = "/var/run/v4/host";
+#ifndef STATX_ATTR_MOUNT_ROOT
+#define STATX_ATTR_MOUNT_ROOT 0x00002000
+#endif
+
+static const char *EMULATOR = "/opt/v4/bin/v4linux";
 static const char *SYS_ROOT = "/opt/v4/sys";
+static const char *GUEST_OVERLAY = "/var/run/v4";
+static const char *HOST_MOUNT = "/var/run/v4/host";
+static const char *HOST_DIR = "/host";
+static const char *HOME_DIR = "/home";
 
 static inline void fail(const char *fmt, ...)
 {
@@ -46,7 +54,7 @@ static inline char *duplicate_or_fail(const char *s)
     return copy;
 }
 
-static void v4_alias(const char *name, char out[15])
+static inline void v4_alias(const char *name, char out[15])
 {
 	size_t n = strlen(name), blen, elen = 0, plen;
 	const char *dot = strrchr(name, '.');
@@ -142,20 +150,20 @@ static inline char *translate_path_raw(const char *path)
     if (path[0] != '/')
         return duplicate_or_fail(path);
 
-    if (path_has_prefix(path, "/home"))
+    if (path_has_prefix(path, HOME_DIR))
         return duplicate_or_fail(path);
 
     if (path_has_prefix(path, HOST_MOUNT)) {
         suffix = path + strlen(HOST_MOUNT);
 
-        if (asprintf(&translated, "/host%s", suffix) < 0)
+        if (asprintf(&translated, "%s%s", HOST_DIR, suffix) < 0)
             fail("memory allocation failed");
 
         return translated;
     }
 
-    if (path_has_prefix(path, GUEST_ROOT)) {
-        suffix = path + strlen(GUEST_ROOT);
+    if (path_has_prefix(path, GUEST_OVERLAY)) {
+        suffix = path + strlen(GUEST_OVERLAY);
 
         return duplicate_or_fail(*suffix ? suffix : "/");
     }
@@ -167,9 +175,9 @@ static inline char *translate_path_raw(const char *path)
     }
 
     if (strcmp(path, "/") == 0)
-        return duplicate_or_fail("/host");
+        return duplicate_or_fail(HOST_DIR);
 
-    if (asprintf(&translated, "/host%s", path) < 0)
+    if (asprintf(&translated, "%s%s", HOST_DIR, path) < 0)
         fail("memory allocation failed");
 
     return translated;
@@ -254,7 +262,7 @@ static inline char *translate_argument(const char *arg)
         }
     }
 
-    guest_prefix = strstr(arg, GUEST_ROOT);
+    guest_prefix = strstr(arg, GUEST_OVERLAY);
     system_prefix = strstr(arg, SYS_ROOT);
 
     if (guest_prefix == NULL) {
@@ -278,37 +286,40 @@ static inline char *translate_argument(const char *arg)
 
 static inline int is_mountpoint(const char *path)
 {
-    pid_t pid = fork();
+    struct statx sx;
 
-    if (pid < 0)
-        return 0;
-
-    if (pid == 0) {
-        execlp("mountpoint", "mountpoint", "-q", "--", path,
-               (char *)NULL);
-        _exit(127);
+    if (statx(AT_FDCWD, path, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC,
+              0, &sx) == 0) {
+        if (sx.stx_attributes_mask & STATX_ATTR_MOUNT_ROOT)
+            return (sx.stx_attributes & STATX_ATTR_MOUNT_ROOT) != 0;
     }
 
-    int status;
+    struct stat st, st_parent;
+    char parent[PATH_MAX];
 
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno == EINTR)
-            continue;
+    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))
         return 0;
-    }
 
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    if (snprintf(parent, sizeof parent, "%s/..", path) >= (int)sizeof parent)
+        return 0;
+
+    if (stat(parent, &st_parent) != 0)
+        return 0;
+
+    return (st.st_dev != st_parent.st_dev) ||
+           (st.st_dev == st_parent.st_dev && st.st_ino == st_parent.st_ino);
 }
+
 
 int main(int argc, char *argv[])
 {
     if (argc < 2)
         fail("kernel did not pass an executable path");
 
-    if (access(PDP11, X_OK) != 0)
-        fail("emulator not installed or not executable: %s", PDP11);
+    if (access(EMULATOR, X_OK) != 0)
+        fail("emulator not installed or not executable: %s", EMULATOR);
 
-    if (!is_mountpoint(GUEST_ROOT))
+    if (!is_mountpoint(GUEST_OVERLAY))
         fail("V4 guest root is not mounted; run v4linux-setup.sh first");
 
     if (!is_mountpoint(HOST_MOUNT))
@@ -344,10 +355,10 @@ int main(int argc, char *argv[])
     if (emu_argv == NULL)
         fail("memory allocation failed");
 
-    emu_argv[0] = (char *)PDP11;
+    emu_argv[0] = (char *)EMULATOR;
     emu_argv[1] = "--host";
     emu_argv[2] = "-r";
-    emu_argv[3] = (char *)GUEST_ROOT;
+    emu_argv[3] = (char *)GUEST_OVERLAY;
     emu_argv[4] = "--chdir";
     emu_argv[5] = guest_cwd;
     emu_argv[6] = guest_exec;
@@ -355,9 +366,9 @@ int main(int argc, char *argv[])
     for (int i = 2; i < argc; ++i)
         emu_argv[i + 5] = translate_argument(argv[i]);
 
-    execv(PDP11, emu_argv);
+    execv(EMULATOR, emu_argv);
 
-    fail("cannot execute emulator %s: %s", PDP11, strerror(errno));
+    fail("cannot execute emulator %s: %s", EMULATOR, strerror(errno));
 
     return 0;
 }
