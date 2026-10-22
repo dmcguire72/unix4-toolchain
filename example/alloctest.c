@@ -1,21 +1,19 @@
+char *msg "Hi!\0";
+char *err "out of memory\0";
+
 main(argc, argv)
 char *argv[];
 {
 	char *str;
 
-	str = calloc(4, 1);
+	sinit();
+	
+	str = strdup(msg);
 	if (str == 0) {
-		printf("out of memory\n");
-		return 1;
+		eputs(err);
+		return -1;
 	}
-
-    str[0] = 'h';
-    str[1] = 'i';
-    str[2] = '!';
-    str[3] = '\0';
-
-	printf("%s\n", str);
-
+	puts(str);
 	free(str);
 	return 0;
 }
