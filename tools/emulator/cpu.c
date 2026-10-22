@@ -21,8 +21,6 @@ static uint16_t pop(void)
 	return v;
 }
 
-#define REGBIT 0x10000u
-
 static inline __attribute__((always_inline))
 uint32_t opaddr(int mode, int reg, int size)
 {

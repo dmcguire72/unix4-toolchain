@@ -818,11 +818,11 @@ static void do_sys(int n, uint16_t *a)
 
 	fC = 0;
 	switch (n) {
-	case 0: /* nullsys */
+	case V4_NULLSYS:
 		return;
-	case 1: /* exit */
+	case V4_EXIT:
 		exit(R[0] & 0377);
-	case 2: { /* fork */
+	case V4_FORK: {
 		if (nkids >= MAXKIDS) { seterr(V4_EAGAIN); return; }
 		fflush(NULL);
 		r = fork();
@@ -848,7 +848,7 @@ static void do_sys(int n, uint16_t *a)
 		}
 		return;
 	}
-	case 3: /* read */
+	case V4_READ:
 		h = hostfd(R[0]);
 		if (h < 0) return;
 		if ((uint32_t)a[0] + a[1] > V4_MEM_LOGICAL) a[1] = V4_MEM_LOGICAL - a[0];
@@ -858,7 +858,7 @@ static void do_sys(int n, uint16_t *a)
 			hosterr();
 		} else R[0] = r;
 		return;
-	case 4: /* write */
+	case V4_WRITE:
 		h = hostfd(R[0]);
 		if (h < 0) return;
 		if ((uint32_t)a[0] + a[1] > V4_MEM_LOGICAL) a[1] = V4_MEM_LOGICAL - a[0];
@@ -869,7 +869,7 @@ static void do_sys(int n, uint16_t *a)
 			hosterr();
 		} else R[0] = r;
 		return;
-	case 5: { /* open */
+	case V4_OPEN: {
 		struct stat st;
 		mappath(a[0], p);
 		if (is_utmp_path(p) && a[1] == 0) {
@@ -892,7 +892,7 @@ static void do_sys(int n, uint16_t *a)
 		R[0] = fd;
 		return;
 	}
-	case 6: /* close */
+	case V4_CLOSE:
 		fd = R[0];
 		h = hostfd(fd);
 		if (h < 0) return;
@@ -900,7 +900,7 @@ static void do_sys(int n, uint16_t *a)
 		fdtab[fd] = -1;
 		fisdir[fd] = 0;
 		return;
-	case 7: { /* wait */
+	case V4_WAIT: {
 		int st;
 		uint16_t g;
 
@@ -920,7 +920,7 @@ static void do_sys(int n, uint16_t *a)
 		}
 		return;
 	}
-	case 8: { /* creat */
+	case V4_CREAT: {
 		mode_t mode = a[1] & 0777;
 
 		mappath(a[0], p);
@@ -936,7 +936,7 @@ static void do_sys(int n, uint16_t *a)
 		if (fd < 0) seterr(V4_EMFILE); else R[0] = fd;
 		return;
 	}
-	case 9: { /* link */
+	case V4_LINK: {
 		char q[PATH_MAX * 2];
 		struct stat st;
 
@@ -960,7 +960,7 @@ static void do_sys(int n, uint16_t *a)
 		}
 		return;
 	}
-	case 10: { /* unlink */
+	case V4_UNLINK: {
 		struct stat st;
 
 		char raw[PATH_MAX];
@@ -979,7 +979,7 @@ static void do_sys(int n, uint16_t *a)
 		if (unlink(p) < 0) hosterr();
 		return;
 	}
-	case 11: { /* exec */
+	case V4_EXEC: {
 		char *av[260] = {0};
 		static char strs[640];
 		int na = 0, nc = 0;
@@ -1079,7 +1079,7 @@ static void do_sys(int n, uint16_t *a)
 		seterr(load_errno);
 		return;
 	}
-	case 12: { /* chdir */
+	case V4_CHDIR: {
 		struct stat st;
 
 		mappath(a[0], p);
@@ -1098,14 +1098,14 @@ static void do_sys(int n, uint16_t *a)
 		}
 		return;
 	}
-	case 13: { /* time */
+	case V4_TIME: {
 		uint32_t t = guest_now();
 
 		R[0] = t >> 16;
 		R[1] = t & 0xffff;
 		return;
 	}
-	case 14: { /* mknod */
+	case V4_MKNOD: {
 		uint16_t m = a[1];
 
 		if ((m & 060000) != 040000 && !suser()) return;
@@ -1131,11 +1131,11 @@ static void do_sys(int n, uint16_t *a)
 		if (r < 0) hosterr();
 		return;
 	}
-	case 15: /* chmod */
+	case V4_CHMOD:
 		mappath(a[0], p);
 		if (chmod(p, a[1] & 0777) < 0) hosterr();
 		return;
-	case 16: { /* chown(path, uid) */
+	case V4_CHOWN: {
 		struct stat st;
 
 		mappath(a[0], p);
@@ -1148,7 +1148,7 @@ static void do_sys(int n, uint16_t *a)
 		if (chown(p, a[1], -1) < 0) hosterr();
 		return;
 	}
-	case 17: { /* break */
+	case V4_BREAK: {
 		uint32_t end = ((uint32_t)a[0] + 63) & ~63u;
 
 		if (end > ((uint32_t)SP & ~63u) && a[0] != 0) {
@@ -1160,7 +1160,7 @@ static void do_sys(int n, uint16_t *a)
 
 		return;
 	}
-	case 18: { /* stat */
+	case V4_STAT: {
 		struct stat st;
 		mappath(a[0], p);
 		if (is_utmp_path(p)) {
@@ -1178,7 +1178,7 @@ static void do_sys(int n, uint16_t *a)
 		putstat(a[1], &st, S_ISDIR(st.st_mode) ? dir_size(p) : st.st_size);
 		return;
 	}
-	case 19: { /* seek */
+	case V4_SEEK: {
 		int w = a[1];
 		off_t off;
 
@@ -1189,7 +1189,7 @@ static void do_sys(int n, uint16_t *a)
 			hosterr();
 		return;
 	}
-	case 21: { /* mount(special, name, rwflag) */
+	case V4_MOUNT: {
 		struct stat st;
 
 		mappath(a[0], p);
@@ -1199,7 +1199,7 @@ static void do_sys(int n, uint16_t *a)
 		seterr(V4_ENXIO);
 		return;
 	}
-	case 22: { /* umount(special) */
+	case V4_UMOUNT: {
 		struct stat st;
 
 		mappath(a[0], p);
@@ -1209,20 +1209,20 @@ static void do_sys(int n, uint16_t *a)
 		seterr(V4_EINVAL);
 		return;
 	}
-	case 23: /* setuid */
+	case V4_SETUID:
 		r = R[0] & 0377;
 		if (g_ruid == r || suser()) g_uid = g_ruid = r;
 		return;
-	case 24: /* getuid */
+	case V4_GETUID:
 		R[0] = g_uid << 8 | g_ruid;
 		return;
-	case 25: /* stime */
+	case V4_STIME:
 		if (!suser()) return;
 		tnote("clock offset kept in the emulator only");
 		time_off = (long)((uint32_t)R[0] << 16 | R[1])
 				- (long)h2g_time(time(NULL));
 		return;
-	case 28: { /* fstat */
+	case V4_FSTAT: {
 		struct stat st;
 
 		fd = R[0];
@@ -1237,16 +1237,16 @@ static void do_sys(int n, uint16_t *a)
 		putstat(a[0], &st, st.st_size);
 		return;
 	}
-	case 30: /* smdate */
+	case V4_SMDATE:
 		return;
-	case 31: /* stty(fd, buf) */
+	case V4_STTY:
 		h = hostfd(R[0]);
 		if (h < 0) return;
 		if (!isatty(h)) { seterr(V4_ENOTTY); return; }
 		tnote("flags applied to host termios (echo/raw/crmod)");
 		tty_set_flags(h, rdw(a[0] + 4));
 		return;
-	case 32: /* gtty(fd, buf) */
+	case V4_GTTY:
 		h = hostfd(R[0]);
 		if (h < 0) return;
 		if (!isatty(h)) { seterr(V4_ENOTTY); return; }
@@ -1254,7 +1254,7 @@ static void do_sys(int n, uint16_t *a)
 		wrw(a[0] + 2, ('@' << 8) | '#');
 		wrw(a[0] + 4, tty_get_flags(h));
 		return;
-	case 34: { /* nice */
+	case V4_NICE: {
 		int v = (int16_t)R[0];
 
 		if (v > 20) v = 20;
@@ -1263,13 +1263,13 @@ static void do_sys(int n, uint16_t *a)
 		if (v > 0) { errno = 0; if (nice(v) < 0 && errno) { } }
 		return;
 	}
-	case 35: /* sleep */
+	case V4_SLEEP:
 		sleep(R[0]);
 		return;
-	case 36: /* sync */
+	case V4_SYNC:
 		sync();
 		return;
-	case 37: { /* kill(pid (R0), sig) */
+	case V4_KILL: {
 		pid_t hp;
 		int hs;
 
@@ -1284,10 +1284,10 @@ static void do_sys(int n, uint16_t *a)
 		if (kill(hp, hs) < 0) seterr(errno == ESRCH ? V4_ESRCH : V4_EPERM);
 		return;
 	}
-	case 38: /* getswit */
+	case V4_GETSWIT:
 		R[0] = 0;
 		return;
-	case 41: /* dup */
+	case V4_DUP:
 		fd = R[0];
 		h = hostfd(fd);
 		if (h < 0) return;
@@ -1299,7 +1299,7 @@ static void do_sys(int n, uint16_t *a)
 		dirst[i] = dirst[fd];
 		R[0] = i;
 		return;
-	case 42: { /* pipe: R0 = read, R1 = write */
+	case V4_PIPE: {
 		int pfd[2], fd0, fd1;
 
 		if (pipe(pfd) < 0) { seterr(V4_ENFILE); return; }
@@ -1316,7 +1316,7 @@ static void do_sys(int n, uint16_t *a)
 		R[1] = fd1;
 		return;
 	}
-	case 43: { /* times */
+	case V4_TIMES: {
 		struct tms t;
 		long hz = sysconf(_SC_CLK_TCK);
 		uint32_t utime, stime_, cutime, cstime;
@@ -1335,20 +1335,20 @@ static void do_sys(int n, uint16_t *a)
 		wrw(a[0] + 10, cstime & 0xffff);
 		return;
 	}
-	case 44: /* profil(buf, size, offset, scale) */
+	case V4_PROFIL:
 		prof_buf = a[0] & ~1;
 		prof_len = a[1];
 		prof_off = a[2];
 		prof_scale = (a[3] >> 1) & 077777;
 		return;
-	case 46: /* setgid */
+	case V4_SETGID:
 		r = R[0] & 0377;
 		if (g_rgid == r || suser()) g_gid = g_rgid = r;
 		return;
-	case 47: /* getgid */
+	case V4_GETGID:
 		R[0] = g_gid << 8 | g_rgid;
 		return;
-	case 48: { /* sig(signum, handler) */
+	case V4_SIG: {
 		int s = a[0];
 
 		if (s <= 0 || s >= V4_NSIG) { seterr(V4_EINVAL); return; }

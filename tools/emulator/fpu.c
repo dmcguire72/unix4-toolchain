@@ -4,19 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
-#define FPS_FER	0100000
-#define FPS_FIV	0001000
-#define FPS_FD	0000200
-#define FPS_FL	0000100
-#define FPS_FT	0000040
-
-static double ac[8];
-static uint16_t fps;
-static int fpN, fpZ, fpV, fpC;
-
-#define DBL	((fps & FPS_FD) != 0)
-#define LNG	((fps & FPS_FL) != 0)
-#define TRUNC	((fps & FPS_FT) != 0)
+double ac[8];
+uint16_t fps;
+int fpN, fpZ, fpV, fpC;
 
 void fp_reset(void)
 {
