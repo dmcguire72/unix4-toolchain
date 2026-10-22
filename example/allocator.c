@@ -3,14 +3,25 @@
  * modern alloc functions for unix v4 userspace.
  * copyright 2026 daniel mcguire.
  * 
+ * not safe to use with other manual allocators!
+ * 
  * requires unmodified CC from unix v4 to compile:
  * cc allocator.c YOURFILE.c
  */
+#define NULL    0
 #define MINBLK	4
 #define CHUNK	1024
 #define KEEP	512
 #define TRIM	2048
 #define MAXREQ	32000
+
+#define MC_OK           0
+#define MC_BAD_ALIGN    1
+#define MC_OUT_OF_HEAP  2
+#define MC_BAD_SIZE     3
+#define MC_ORDER        4
+#define MC_NOT_COALESC  5
+#define MC_PAST_END     6
 
 struct mblk {
 	char *mb_size;
@@ -29,12 +40,12 @@ struct mblk *nb;
 
 	b = nb;
 	q = &m_free;
-	while ((p = q->mb_next) != 0 && p < b)
+	while ((p = q->mb_next) != NULL && p < b)
 		q = p;
 
 	e = b;
 	e = e + b->mb_size;
-	if (p != 0 && e > p)
+	if (p != NULL && e > p)
 		return(-1);
 	if (q != &m_free) {
 		f = q;
@@ -42,7 +53,7 @@ struct mblk *nb;
 		if (f > b)
 			return(-1);
 	}
-	if (p != 0 && e == p) {
+	if (p != NULL && e == p) {
 		b->mb_size = b->mb_size + p->mb_size;
 		b->mb_next = p->mb_next;
 	} else
@@ -63,26 +74,36 @@ int n;
 	register char *a, *e;
 	register struct mblk *b;
 	int i;
+	int r;
 
 	if (n < CHUNK)
 		n = CHUNK;
 	n = (n + 63) & ~63;
-	e = sbrk(0);
-	i = e;
-	if (i & 1) {
-		if (sbrk(1) == -1)
+
+	if (m_hend == 0) {
+		e = sbrk(0);
+		i = e;
+		if (i == -1)
 			return(0);
-		e = e + 1;
+		if (i & 1) {
+			i = i + 1;
+			r = brk(i);
+			if (r == -1)
+				return(0);
+			e = e + 1;
+		}
+		m_hlo = e;
+		m_hend = e;
 	}
-	if (e + n < e)
+
+	a = m_hend;
+	if (a + n < a)
 		return(0);
-	a = sbrk(n);
-	if (a == -1)
+	r = brk(a + n);
+	if (r == -1)
 		return(0);
-	if (m_hlo == 0 || a < m_hlo)
-		m_hlo = a;
-	if (a + n > m_hend)
-		m_hend = a + n;
+	m_hend = a + n;
+
 	b = a;
 	b->mb_size = n;
 	m_insert(b);
@@ -103,7 +124,7 @@ int n;
 	if (sz < MINBLK)
 		sz = MINBLK;
 	for (;;) {
-		for (q = &m_free; (p = q->mb_next) != 0; q = p) {
+		for (q = &m_free; (p = q->mb_next) != NULL; q = p) {
 			if (p->mb_size < sz)
 				continue;
 			if (p->mb_size - sz >= MINBLK) {
@@ -128,17 +149,15 @@ struct mblk *nb;
 {
 	register struct mblk *b;
 	register char *e;
-	char *cur, *sz;
+	char *sz;
 	int rel;
+	int r;
 
 	b = nb;
 	while (b->mb_size >= TRIM) {
 		e = b;
 		e = e + b->mb_size;
 		if (e != m_hend)
-			return;
-		cur = sbrk(0);
-		if (cur != m_hend)
 			return;
 		sz = b->mb_size - KEEP;
 		if (sz > 16384)
@@ -149,7 +168,8 @@ struct mblk *nb;
 		}
 		if (rel <= 0)
 			return;
-		if (sbrk(0 - rel) == -1)
+		r = brk(m_hend - rel);
+		if (r == -1)
 			return;
 		b->mb_size = b->mb_size - rel;
 		m_hend = m_hend - rel;
@@ -163,7 +183,7 @@ char *a;
 	register char *e;
 	int i;
 
-	if (a == 0)
+	if (a == NULL)
 		return(0);
 	e = a - 2;
 	i = e;
@@ -193,7 +213,7 @@ int n;
 	char *e;
 	int cap, i;
 
-	if (a == 0)
+	if (a == NULL)
 		return(malloc(n));
 	if (n <= 0) {
 		free(a);
@@ -231,10 +251,10 @@ int n, size;
 	total = n * size;
 
 	p = malloc(total);
-	if (p == 0)
-		return(0);
+	if (p == NULL)
+		return(NULL);
 
-	for (i = 0; i < total; i++)
+	for (i=0;i<total;i++)
 		p[i] = 0;
 
 	return(p);
@@ -242,32 +262,30 @@ int n, size;
 
 mcheck()
 {
-	register struct mblk *p;
-	register char *e, *last;
-	int i;
+    register struct mblk *p;
+    register char *e, *last;
+    int i;
 
-	last = 0;
-	for (p = m_free.mb_next; p != 0; p = p->mb_next) {
-		e = p;
-		i = e;
-		if (i & 1)
-			return(1);
-		if (e < m_hlo || e >= m_hend)
-			return(2);
-		i = p->mb_size;
-		if (p->mb_size < MINBLK || (i & 1))
-			return(3);
-		if (last != 0 && e <= last)
-			return(4);
-		if (last != 0 && e == last)
-			return(5);
-		last = e + p->mb_size;
-		if (last > m_hend)
-			return(6);
-		if (p->mb_next != 0 && p->mb_next == last)
-			return(5);
-	}
-	return(0);
+    last = 0;
+    for (p = m_free.mb_next; p != NULL; p = p->mb_next) {
+        e = p;
+        i = e;
+        if (i & 1)
+            return(MC_BAD_ALIGN);
+        if (e < m_hlo || e >= m_hend)
+            return(MC_OUT_OF_HEAP);
+        i = p->mb_size;
+        if (i < MINBLK || (i & 1))
+            return(MC_BAD_SIZE);
+        if (last != NULL && e < last)
+            return(MC_ORDER);
+        if (last != NULL && e == last)
+            return(MC_NOT_COALESC);
+        last = e + p->mb_size;
+        if (last > m_hend)
+            return(MC_PAST_END);
+    }
+    return(MC_OK);
 }
 
 mfreebytes()
@@ -276,9 +294,20 @@ mfreebytes()
 	register int n;
 
 	n = 0;
-	for (p = m_free.mb_next; p != 0; p = p->mb_next)
+	for (p = m_free.mb_next; p!=NULL; p = p->mb_next)
 		n = n + p->mb_size;
 	return(n);
+}
+
+strlen(str)
+char *str;
+{
+	register int l;
+	l=0;
+
+	while(str[l]) l++;
+
+	return l;
 }
 
 char*
@@ -286,8 +315,11 @@ memcpy(dst, src, n)
 char *dst;
 char *src;
 {
-	char *ret;
-	int i;
+	register char *ret;
+	register int i;
+
+	if (dst == NULL || src == NULL)
+		return NULL;
 
 	ret = dst;
 
@@ -295,4 +327,40 @@ char *src;
 		*dst++ = *src++;
 
 	return ret;
+}
+
+char*
+strcpy(dst, src)
+char *dst;
+char *src;
+{
+	register int l;
+
+	if (dst == NULL || src == NULL) 
+		return NULL;
+
+	l=strlen(src);
+	l++;
+
+	memcpy(dst, src, l);
+	return dst;
+}
+
+char*
+strdup(src)
+char *src;
+{
+	register char *dst;
+	register int l;
+
+	if (src == NULL) return NULL;
+
+	l=strlen(src);
+	l++;
+
+	dst = malloc(l);
+	if (dst == NULL) return NULL;
+	memcpy(dst, src, l);
+
+	return dst;
 }
