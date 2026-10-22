@@ -8,8 +8,8 @@ CFLAGS =
 BIN = example/bin
 OBJ = example/obj
 
-PLAIN_PROGRAMS = char crash float hello
-LIB_PROGRAMS = crypttest alloctest
+PLAIN_PROGRAMS = char crash float
+LIB_PROGRAMS = crypttest alloctest hello
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
 TARGETS = $(PROGRAMS:%=$(BIN)/%)

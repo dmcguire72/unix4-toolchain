@@ -16,5 +16,4 @@ level_one() {
 
 main() {
     level_one();
-    return 0;
 }
