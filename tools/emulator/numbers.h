@@ -106,7 +106,102 @@
 #pragma endregion
 #pragma region FPU
 
+#define FP_NUM_AC               8
+#define PDP11_WORD_SIZE         2
+#define PDP11_PC_REG            7
+#define PDP11_MODE_DIRECT       0
+#define PDP11_MODE_AUTOINC      2
 
+#define FP_SINGLE_BYTES         4
+#define FP_DOUBLE_BYTES         8
+#define INT_SHORT_BYTES         2
+#define INT_LONG_BYTES          4
+
+#define FPS_CC_MASK             017
+#define FPS_CC_C_SHIFT          0
+#define FPS_CC_V_SHIFT          1
+#define FPS_CC_Z_SHIFT          2
+#define FPS_CC_N_SHIFT          3
+
+#define FP_SIGN_BIT             0x8000
+#define FP_SIGN_SHIFT           15
+
+#define FP_EXP_BIAS             128
+#define FP_EXP_MAX              255
+#define FP_EXP_SHIFT            7
+#define FP_EXP_MASK             0xFF
+
+#define FP_FRAC_HIGH_MASK       0x7F
+#define FP_HIDDEN_BIT           0x80
+
+#define FP_FRAC_BITS_SINGLE     24
+#define FP_FRAC_BITS_DOUBLE     56
+
+#define FP_MANT_SHIFT_WORD0_DBL 48
+#define FP_MANT_SHIFT_WORD0_SNG 16
+#define FP_MANT_SHIFT_WORD1     32
+#define FP_MANT_SHIFT_WORD2     16
+
+#define IEEE754_DOUBLE_SIGN_SHIFT       63
+#define IEEE754_DOUBLE_SIGN_MASK        (1ULL << IEEE754_DOUBLE_SIGN_SHIFT)
+#define IEEE754_DOUBLE_EXP_BIAS         1023
+#define IEEE754_DOUBLE_FRAC_BITS        52
+#define IEEE754_DOUBLE_FRAC_MASK        ((1ULL << IEEE754_DOUBLE_FRAC_BITS) - 1)
+#define IEEE754_DOUBLE_HIDDEN_BIT       (1ULL << IEEE754_DOUBLE_FRAC_BITS)
+
+#define FP_FAST_DBL_MANT_SHIFT          3
+#define FP_FAST_SNG_ROUND_BIT           (1ULL << 28)
+#define FP_FAST_SNG_TRUNC_MASK          ((1ULL << 29) - 1)
+#define FP_FAST_SNG_FRAC_SHIFT          29
+#define FP_FAST_SNG_HIDDEN_BIT          (1ULL << 23)
+#define FP_FAST_SNG_FRAC_MASK           0x7FFFFF
+#define FP_FAST_EXP_BIAS_OFFSET         894
+
+#define FP_ROUND_NEAREST_BIAS           0.5
+
+#define FP_INT16_MAX            32767
+#define FP_INT16_MIN            -32768
+#define FP_INT32_MAX_F          2147483647.0
+#define FP_INT32_MIN_F          -2147483648.0
+
+#define FP_IR_AC_SHIFT          6
+#define FP_IR_AC_MASK           3
+#define FP_IR_DM_SHIFT          3
+#define FP_IR_DM_MASK           7
+#define FP_IR_DR_MASK           7
+#define FP_IR_NEG_BIT           0100
+
+#define FP_OP_MASK_GROUP1       0177700
+#define FP_OP_MASK_GROUP2       0177400
+
+#define OP_LDFPS                0170100
+#define OP_STFPS                0170200
+#define OP_STST                 0170300
+#define OP_CLRF                 0170400
+#define OP_TSTF                 0170500
+#define OP_ABSF                 0170600
+#define OP_NEGF                 0170700
+
+#define OP_MULF                 0171000
+#define OP_MODF                 0171400
+#define OP_ADDF                 0172000
+#define OP_LDF                  0172400
+#define OP_SUBF                 0173000
+#define OP_CMPF                 0173400
+#define OP_STF                  0174000
+#define OP_DIVF                 0174400
+#define OP_STEXP                0175000
+#define OP_STCFI                0175400
+#define OP_STCFD                0176000
+#define OP_LDEXP                0176400
+#define OP_LDCIF                0177000
+#define OP_LDCDF                0177400
+
+#define OP_CFCC                 0170000
+#define OP_SETF                 0170001
+#define OP_SETI                 0170002
+#define OP_SETD                 0170011
+#define OP_SETL                 0170012
 
 #pragma endregion
 #pragma region SIGNALS

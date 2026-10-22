@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
-double ac[8];
+double ac[FP_NUM_AC];
 uint16_t fps;
 int fpN, fpZ, fpV, fpC;
 
@@ -12,14 +12,14 @@ void fp_reset(void)
 {
 	int i;
 
-	for (i = 0; i < 8; i++) ac[i] = 0;
+	for (i = 0; i < FP_NUM_AC; i++) ac[i] = 0;
 	fps = 0;
 	fpN = fpZ = fpV = fpC = 0;
 }
 
 static inline double pow2i(int k)
 {
-	uint64_t u = (uint64_t)(k + 1023) << 52;
+	uint64_t u = (uint64_t)(k + IEEE754_DOUBLE_EXP_BIAS) << IEEE754_DOUBLE_FRAC_BITS;
 	double d;
 
 	memcpy(&d, &u, sizeof d);
@@ -29,21 +29,21 @@ static inline double pow2i(int k)
 static double fget(uint16_t a, int dbl)
 {
 	uint16_t w0 = rdw(a);
-	int e = (w0 >> 7) & 0xff;
+	int e = (w0 >> FP_EXP_SHIFT) & FP_EXP_MASK;
 	uint64_t m;
 	double v;
 
 	if (e == 0) return 0.0;
-	m = 0x80 | (w0 & 0x7f);
-	m = (m << 16) | rdw(a + 2);
+	m = FP_HIDDEN_BIT | (w0 & FP_FRAC_HIGH_MASK);
+	m = (m << 16) | rdw(a + PDP11_WORD_SIZE);
 	if (dbl) {
-		m = (m << 16) | rdw(a + 4);
-		m = (m << 16) | rdw(a + 6);
-		v = (double)m * pow2i(e - 128 - 56);
+		m = (m << 16) | rdw(a + 2 * PDP11_WORD_SIZE);
+		m = (m << 16) | rdw(a + 3 * PDP11_WORD_SIZE);
+		v = (double)m * pow2i(e - FP_EXP_BIAS - FP_FRAC_BITS_DOUBLE);
 	} else {
-		v = (double)m * pow2i(e - 128 - 24);
+		v = (double)m * pow2i(e - FP_EXP_BIAS - FP_FRAC_BITS_SINGLE);
 	}
-	return (w0 & 0x8000) ? -v : v;
+	return (w0 & FP_SIGN_BIT) ? -v : v;
 }
 
 static void fput_slow(uint16_t a, double v, int dbl)
@@ -56,34 +56,34 @@ static void fput_slow(uint16_t a, double v, int dbl)
 	if (v == 0 || isnan(v) || isinf(v)) goto zero;
 	if (sign) v = -v;
 	m = frexp(v, &e);
-	e += 128;
+	e += FP_EXP_BIAS;
 	if (dbl) {
-		mant = (uint64_t)ldexp(m, 56);
+		mant = (uint64_t)ldexp(m, FP_FRAC_BITS_DOUBLE);
 	} else {
-		mant = (uint64_t)floor(ldexp(m, 24) + (TRUNC ? 0 : 0.5));
-		if (mant >> 24) { mant >>= 1; e++; }
+		mant = (uint64_t)floor(ldexp(m, FP_FRAC_BITS_SINGLE) + (TRUNC ? 0 : FP_ROUND_NEAREST_BIAS));
+		if (mant >> FP_FRAC_BITS_SINGLE) { mant >>= 1; e++; }
 	}
 	if (e <= 0) goto zero;
-	if (e > 255) {
+	if (e > FP_EXP_MAX) {
 		if (fps & FPS_FIV) trap_sig(V4_SIGFPT);
 		goto zero;
 	}
 	if (dbl) {
-		w0 = (sign << 15) | (e << 7) | ((mant >> 48) & 0x7f);
+		w0 = (sign << FP_SIGN_SHIFT) | (e << FP_EXP_SHIFT) | ((mant >> FP_MANT_SHIFT_WORD0_DBL) & FP_FRAC_HIGH_MASK);
 		wrw(a, w0);
-		wrw(a + 2, mant >> 32);
-		wrw(a + 4, mant >> 16);
-		wrw(a + 6, mant);
+		wrw(a + PDP11_WORD_SIZE, mant >> FP_MANT_SHIFT_WORD1);
+		wrw(a + 2 * PDP11_WORD_SIZE, mant >> FP_MANT_SHIFT_WORD2);
+		wrw(a + 3 * PDP11_WORD_SIZE, mant);
 	} else {
-		w0 = (sign << 15) | (e << 7) | ((mant >> 16) & 0x7f);
+		w0 = (sign << FP_SIGN_SHIFT) | (e << FP_EXP_SHIFT) | ((mant >> FP_MANT_SHIFT_WORD0_SNG) & FP_FRAC_HIGH_MASK);
 		wrw(a, w0);
-		wrw(a + 2, mant);
+		wrw(a + PDP11_WORD_SIZE, mant);
 	}
 	return;
 zero:
 	wrw(a, 0);
-	wrw(a + 2, 0);
-	if (dbl) { wrw(a + 4, 0); wrw(a + 6, 0); }
+	wrw(a + PDP11_WORD_SIZE, 0);
+	if (dbl) { wrw(a + 2 * PDP11_WORD_SIZE, 0); wrw(a + 3 * PDP11_WORD_SIZE, 0); }
 }
 
 static double rnd_slow(double x)
@@ -93,69 +93,67 @@ static double rnd_slow(double x)
 
 	if (DBL || x == 0 || isnan(x) || isinf(x)) return x;
 	m = frexp(x, &e);
-	m = ldexp(m, 24);
-	m = TRUNC ? trunc(m) : (m < 0 ? -floor(-m + 0.5) : floor(m + 0.5));
-	return ldexp(m, e - 24);
+	m = ldexp(m, FP_FRAC_BITS_SINGLE);
+	m = TRUNC ? trunc(m) : (m < 0 ? -floor(-m + FP_ROUND_NEAREST_BIAS) : floor(m + FP_ROUND_NEAREST_BIAS));
+	return ldexp(m, e - FP_FRAC_BITS_SINGLE);
 }
 
 static void fput(uint16_t a, double v, int dbl)
 {
-	const uint64_t SIGNBIT = 1ULL << 63;
 	uint64_t b, mant;
 	int sign = v < 0, e;
 	uint16_t w0;
 
 	if (v == 0 || isnan(v) || isinf(v)) goto zero;
 	memcpy(&b, &v, sizeof b);
-	b &= ~SIGNBIT;
-	if (UNLIKELY((b >> 52) == 0)) {
+	b &= ~IEEE754_DOUBLE_SIGN_MASK;
+	if (UNLIKELY((b >> IEEE754_DOUBLE_FRAC_BITS) == 0)) {
 		fput_slow(a, v, dbl);
 		return;
 	}
 	if (dbl) {
-		mant = ((1ULL << 52) | (b & ((1ULL << 52) - 1))) << 3;
+		mant = (IEEE754_DOUBLE_HIDDEN_BIT | (b & IEEE754_DOUBLE_FRAC_MASK)) << FP_FAST_DBL_MANT_SHIFT;
 	} else {
-		if (!TRUNC) b += 1ULL << 28;
-		b &= ~((1ULL << 29) - 1);
-		mant = (1ULL << 23) | ((b >> 29) & 0x7fffff);
+		if (!TRUNC) b += FP_FAST_SNG_ROUND_BIT;
+		b &= ~FP_FAST_SNG_TRUNC_MASK;
+		mant = FP_FAST_SNG_HIDDEN_BIT | ((b >> FP_FAST_SNG_FRAC_SHIFT) & FP_FAST_SNG_FRAC_MASK);
 	}
-	e = (int)(b >> 52) - 894;
+	e = (int)(b >> IEEE754_DOUBLE_FRAC_BITS) - FP_FAST_EXP_BIAS_OFFSET;
 	if (e <= 0) goto zero;
-	if (e > 255) {
+	if (e > FP_EXP_MAX) {
 		if (fps & FPS_FIV) trap_sig(V4_SIGFPT);
 		goto zero;
 	}
 	if (dbl) {
-		w0 = (sign << 15) | (e << 7) | ((mant >> 48) & 0x7f);
+		w0 = (sign << FP_SIGN_SHIFT) | (e << FP_EXP_SHIFT) | ((mant >> FP_MANT_SHIFT_WORD0_DBL) & FP_FRAC_HIGH_MASK);
 		wrw(a, w0);
-		wrw(a + 2, mant >> 32);
-		wrw(a + 4, mant >> 16);
-		wrw(a + 6, mant);
+		wrw(a + PDP11_WORD_SIZE, mant >> FP_MANT_SHIFT_WORD1);
+		wrw(a + 2 * PDP11_WORD_SIZE, mant >> FP_MANT_SHIFT_WORD2);
+		wrw(a + 3 * PDP11_WORD_SIZE, mant);
 	} else {
-		w0 = (sign << 15) | (e << 7) | ((mant >> 16) & 0x7f);
+		w0 = (sign << FP_SIGN_SHIFT) | (e << FP_EXP_SHIFT) | ((mant >> FP_MANT_SHIFT_WORD0_SNG) & FP_FRAC_HIGH_MASK);
 		wrw(a, w0);
-		wrw(a + 2, mant);
+		wrw(a + PDP11_WORD_SIZE, mant);
 	}
 	return;
 zero:
 	wrw(a, 0);
-	wrw(a + 2, 0);
-	if (dbl) { wrw(a + 4, 0); wrw(a + 6, 0); }
+	wrw(a + PDP11_WORD_SIZE, 0);
+	if (dbl) { wrw(a + 2 * PDP11_WORD_SIZE, 0); wrw(a + 3 * PDP11_WORD_SIZE, 0); }
 }
 
 static double rnd(double x)
 {
-	const uint64_t SIGNBIT = 1ULL << 63;
 	uint64_t b, mag;
 
 	if (DBL || x == 0 || isnan(x) || isinf(x)) return x;
 	memcpy(&b, &x, sizeof b);
-	mag = b & ~SIGNBIT;
-	if (UNLIKELY((mag >> 52) == 0))
+	mag = b & ~IEEE754_DOUBLE_SIGN_MASK;
+	if (UNLIKELY((mag >> IEEE754_DOUBLE_FRAC_BITS) == 0))
 		return rnd_slow(x);
-	if (!TRUNC) mag += 1ULL << 28;
-	mag &= ~((1ULL << 29) - 1);
-	b = (b & SIGNBIT) | mag;
+	if (!TRUNC) mag += FP_FAST_SNG_ROUND_BIT;
+	mag &= ~FP_FAST_SNG_TRUNC_MASK;
+	b = (b & IEEE754_DOUBLE_SIGN_MASK) | mag;
 	memcpy(&x, &b, sizeof x);
 	return x;
 }
@@ -169,83 +167,90 @@ static void fcc(double v)
 
 static double fsrc(int mode, int reg, int dbl)
 {
-	if (mode == 0) return ac[reg & 7];
+	if (mode == PDP11_MODE_DIRECT) return ac[reg & FP_IR_DR_MASK];
 
-	if (mode == 2 && reg == 7) {
+	if (mode == PDP11_MODE_AUTOINC && reg == PDP11_PC_REG) {
 		uint16_t w0 = rdw(PC);
-		PC += 2;
-		int e = (w0 >> 7) & 0xff;
+		PC += PDP11_WORD_SIZE;
+		int e = (w0 >> FP_EXP_SHIFT) & FP_EXP_MASK;
 		if (e == 0) return 0.0;
-		uint64_t m = (uint64_t)(0x80 | (w0 & 0x7f)) << (dbl ? 48 : 16);
-		double v = (double)m * pow2i(e - 128 - (dbl ? 56 : 24));
-		return (w0 & 0x8000) ? -v : v;
+		uint64_t m = (uint64_t)(FP_HIDDEN_BIT | (w0 & FP_FRAC_HIGH_MASK)) << (dbl ? FP_MANT_SHIFT_WORD0_DBL : FP_MANT_SHIFT_WORD0_SNG);
+		double v = (double)m * pow2i(e - FP_EXP_BIAS - (dbl ? FP_FRAC_BITS_DOUBLE : FP_FRAC_BITS_SINGLE));
+		return (w0 & FP_SIGN_BIT) ? -v : v;
 	}
 
-	getops(mode, reg, dbl ? 8 : 4);
+	getops(mode, reg, dbl ? FP_DOUBLE_BYTES : FP_SINGLE_BYTES);
 	return fget(ea, dbl);
 }
 
 static uint16_t get_fps(void)
 {
-	return (fps & ~017) | fpN << 3 | fpZ << 2 | fpV << 1 | fpC;
+	return (fps & ~FPS_CC_MASK) |
+	       (fpN << FPS_CC_N_SHIFT) |
+	       (fpZ << FPS_CC_Z_SHIFT) |
+	       (fpV << FPS_CC_V_SHIFT) |
+	       (fpC << FPS_CC_C_SHIFT);
 }
 
 static void fstep_exec(uint16_t ir)
 {
-	int a = (ir >> 6) & 3, dm = (ir >> 3) & 7, dr = ir & 7, dbl = DBL;
+	int a = (ir >> FP_IR_AC_SHIFT) & FP_IR_AC_MASK;
+	int dm = (ir >> FP_IR_DM_SHIFT) & FP_IR_DM_MASK;
+	int dr = ir & FP_IR_DR_MASK;
+	int dbl = DBL;
 	double v;
 
-	switch (ir & 0177700) {
-	case 0170100: { /* LDFPS */
+	switch (ir & FP_OP_MASK_GROUP1) {
+	case OP_LDFPS: {
 		uint16_t w;
 
 		getop(dm, dr, 0);
 		w = load(0);
-		fps = w & ~017;
-		fpN = (w >> 3) & 1;
-		fpZ = (w >> 2) & 1;
-		fpV = (w >> 1) & 1;
-		fpC = w & 1;
+		fps = w & ~FPS_CC_MASK;
+		fpN = (w >> FPS_CC_N_SHIFT) & 1;
+		fpZ = (w >> FPS_CC_Z_SHIFT) & 1;
+		fpV = (w >> FPS_CC_V_SHIFT) & 1;
+		fpC = (w >> FPS_CC_C_SHIFT) & 1;
 		return;
 	}
-	case 0170200: /* STFPS */
+	case OP_STFPS:
 		getop(dm, dr, 0);
 		store(get_fps(), 0);
 		return;
-	case 0170300: /* STST: FEC & FEA */
-		if (dm == 0) { R[dr] = 0; return; }
-		getops(dm, dr, 4);
+	case OP_STST:
+		if (dm == PDP11_MODE_DIRECT) { R[dr] = 0; return; }
+		getops(dm, dr, INT_LONG_BYTES);
 		wrw(ea, 0);
-		wrw(ea + 2, 0);
+		wrw(ea + PDP11_WORD_SIZE, 0);
 		return;
-	case 0170400: /* CLRF */
-		if (dm == 0) ac[dr & 7] = 0;
-		else { getops(dm, dr, dbl ? 8 : 4); fput(ea, 0, dbl); }
+	case OP_CLRF:
+		if (dm == PDP11_MODE_DIRECT) ac[dr & FP_IR_DR_MASK] = 0;
+		else { getops(dm, dr, dbl ? FP_DOUBLE_BYTES : FP_SINGLE_BYTES); fput(ea, 0, dbl); }
 		fcc(0);
 		return;
-	case 0170500: /* TSTF */
+	case OP_TSTF:
 		fcc(fsrc(dm, dr, dbl));
 		return;
-	case 0170600: case 0170700: /* ABSF NEGF */
-		if (dm == 0) {
-			v = ac[dr & 7];
-			v = (ir & 0100) ? -v : fabs(v);
-			ac[dr & 7] = v;
+	case OP_ABSF: case OP_NEGF:
+		if (dm == PDP11_MODE_DIRECT) {
+			v = ac[dr & FP_IR_DR_MASK];
+			v = (ir & FP_IR_NEG_BIT) ? -v : fabs(v);
+			ac[dr & FP_IR_DR_MASK] = v;
 		} else {
-			getops(dm, dr, dbl ? 8 : 4);
+			getops(dm, dr, dbl ? FP_DOUBLE_BYTES : FP_SINGLE_BYTES);
 			v = fget(ea, dbl);
-			v = (ir & 0100) ? -v : fabs(v);
+			v = (ir & FP_IR_NEG_BIT) ? -v : fabs(v);
 			fput(ea, v, dbl);
 		}
 		fcc(v);
 		return;
 	}
-	switch (ir & 0177400) {
-	case 0171000: v = fsrc(dm, dr, dbl); ac[a] = rnd(ac[a] * v); fcc(ac[a]); return; /* MULF */
-	case 0172000: v = fsrc(dm, dr, dbl); ac[a] = rnd(ac[a] + v); fcc(ac[a]); return; /* ADDF */
-	case 0172400: v = fsrc(dm, dr, dbl); ac[a] = v; fcc(v); return;		/* LDF */
-	case 0173000: v = fsrc(dm, dr, dbl); ac[a] = rnd(ac[a] - v); fcc(ac[a]); return; /* SUBF */
-	case 0171400: { /* MODF: AC*src split into integer and fraction */
+	switch (ir & FP_OP_MASK_GROUP2) {
+	case OP_MULF: v = fsrc(dm, dr, dbl); ac[a] = rnd(ac[a] * v); fcc(ac[a]); return;
+	case OP_ADDF: v = fsrc(dm, dr, dbl); ac[a] = rnd(ac[a] + v); fcc(ac[a]); return;
+	case OP_LDF: v = fsrc(dm, dr, dbl); ac[a] = v; fcc(v); return;
+	case OP_SUBF: v = fsrc(dm, dr, dbl); ac[a] = rnd(ac[a] - v); fcc(ac[a]); return;
+	case OP_MODF: {
 		double ip, fr;
 
 		v = fsrc(dm, dr, dbl);
@@ -255,7 +260,7 @@ static void fstep_exec(uint16_t ir)
 		fcc(fr);
 		return;
 	}
-	case 0174400: /* DIVF */
+	case OP_DIVF:
 		v = fsrc(dm, dr, dbl);
 		if (v == 0) {
 			fpV = 1;
@@ -265,36 +270,36 @@ static void fstep_exec(uint16_t ir)
 		ac[a] = rnd(ac[a] / v);
 		fcc(ac[a]);
 		return;
-	case 0173400: /* CMPF */
+	case OP_CMPF:
 		v = fsrc(dm, dr, dbl) - ac[a];
 		fpN = v < 0;
 		fpZ = v == 0;
 		fpV = fpC = 0;
 		return;
-	case 0174000: /* STF */
-		if (dm == 0) ac[dr & 7] = ac[a];
-		else { getops(dm, dr, dbl ? 8 : 4); fput(ea, ac[a], dbl); }
+	case OP_STF:
+		if (dm == PDP11_MODE_DIRECT) ac[dr & FP_IR_DR_MASK] = ac[a];
+		else { getops(dm, dr, dbl ? FP_DOUBLE_BYTES : FP_SINGLE_BYTES); fput(ea, ac[a], dbl); }
 		return;
-	case 0177000: { /* LDCIF */
-		int sz = LNG ? 4 : 2;
+	case OP_LDCIF: {
+		int sz = LNG ? INT_LONG_BYTES : INT_SHORT_BYTES;
 		int32_t n;
 
 		getops(dm, dr, sz);
 		if (regdst >= 0) n = (int16_t)R[regdst];
-		else if (sz == 2) n = (int16_t)rdw(ea);
-		else n = (int32_t)((uint32_t)rdw(ea) << 16 | rdw(ea + 2));
+		else if (sz == INT_SHORT_BYTES) n = (int16_t)rdw(ea);
+		else n = (int32_t)((uint32_t)rdw(ea) << 16 | rdw(ea + PDP11_WORD_SIZE));
 		ac[a] = rnd(n);
 		fcc(ac[a]);
 		return;
 	}
-	case 0175400: { /* STCFI */
+	case OP_STCFI: {
 		double t = trunc(ac[a]);
-		int sz = LNG ? 4 : 2;
+		int sz = LNG ? INT_LONG_BYTES : INT_SHORT_BYTES;
 
 		getops(dm, dr, sz);
 		fpV = fpC = 0;
-		if ((sz == 2 && (t > 32767 || t < -32768)) ||
-		    (sz == 4 && (t > 2147483647.0 || t < -2147483648.0))) {
+		if ((sz == INT_SHORT_BYTES && (t > FP_INT16_MAX || t < FP_INT16_MIN)) ||
+		    (sz == INT_LONG_BYTES && (t > FP_INT32_MAX_F || t < FP_INT32_MIN_F))) {
 			fpC = 1;
 			t = 0;
 			if (fps & FPS_FIV) trap_sig(V4_SIGFPT);
@@ -302,24 +307,24 @@ static void fstep_exec(uint16_t ir)
 		fpN = t < 0;
 		fpZ = t == 0;
 		if (regdst >= 0) R[regdst] = (int16_t)t;
-		else if (sz == 2) wrw(ea, (int16_t)t);
+		else if (sz == INT_SHORT_BYTES) wrw(ea, (int16_t)t);
 		else {
 			wrw(ea, (uint32_t)(int32_t)t >> 16);
-			wrw(ea + 2, (uint32_t)(int32_t)t);
+			wrw(ea + PDP11_WORD_SIZE, (uint32_t)(int32_t)t);
 		}
 		return;
 	}
-	case 0177400: /* LDCDF / LDCFD: load */
+	case OP_LDCDF:
 		v = fsrc(dm, dr, !dbl);
 		if (DBL) ac[a] = v; else ac[a] = rnd(v);
 		fcc(ac[a]);
 		return;
-	case 0176000: /* STCFD / STCDF: store */
-		if (dm == 0) ac[dr & 7] = ac[a];
-		else { getops(dm, dr, dbl ? 4 : 8); fput(ea, ac[a], !dbl); }
+	case OP_STCFD:
+		if (dm == PDP11_MODE_DIRECT) ac[dr & FP_IR_DR_MASK] = ac[a];
+		else { getops(dm, dr, dbl ? FP_SINGLE_BYTES : FP_DOUBLE_BYTES); fput(ea, ac[a], !dbl); }
 		return;
-	case 0175000: { /* STEXP: biased exponent */
-		int e = -128;
+	case OP_STEXP: {
+		int e = -FP_EXP_BIAS;
 
 		if (ac[a] != 0) frexp(ac[a], &e);
 		getop(dm, dr, 0);
@@ -329,7 +334,7 @@ static void fstep_exec(uint16_t ir)
 		fpV = fpC = 0;
 		return;
 	}
-	case 0176400: { /* LDEXP */
+	case OP_LDEXP: {
 		int e, dummy;
 		double m;
 
@@ -344,11 +349,11 @@ static void fstep_exec(uint16_t ir)
 	}
 	}
 	switch (ir) {
-	case 0170000: fN = fpN; fZ = fpZ; fV = fpV; fC = fpC; return; /* CFCC */
-	case 0170001: fps &= ~FPS_FD; return;			/* SETF */
-	case 0170002: fps &= ~FPS_FL; return;			/* SETI */
-	case 0170011: fps |= FPS_FD; return;			/* SETD */
-	case 0170012: fps |= FPS_FL; return;			/* SETL */
+	case OP_CFCC: fN = fpN; fZ = fpZ; fV = fpV; fC = fpC; return;
+	case OP_SETF: fps &= ~FPS_FD; return;
+	case OP_SETI: fps &= ~FPS_FL; return;
+	case OP_SETD: fps |= FPS_FD; return;
+	case OP_SETL: fps |= FPS_FL; return;
 	}
 	trap_sig(V4_SIGINS);
 }
@@ -356,7 +361,7 @@ static void fstep_exec(uint16_t ir)
 static void fstep_traced(uint16_t ir)
 {
 	char text[96] = "";
-	uint16_t at = PC - 2;
+	uint16_t at = PC - PDP11_WORD_SIZE;
 
 	disasm(at, text, sizeof text);
 
