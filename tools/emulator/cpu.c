@@ -2,18 +2,18 @@
 
 static unsigned long prof_tick;
 
-static void branch(int cond, uint16_t ir)
+static inline void branch(int cond, uint16_t ir)
 {
 	if (cond) PC += 2 * (int8_t)ir;
 }
 
-static void push(uint16_t v)
+static inline void push(uint16_t v)
 {
 	SP -= 2;
 	wrw(SP, v);
 }
 
-static uint16_t pop(void)
+static inline uint16_t pop(void)
 {
 	uint16_t v = rdw(SP);
 
@@ -78,7 +78,7 @@ void double_op(uint16_t ir, int opc, int byte)
 	uint16_t sign = byte ? 0x80 : 0x8000;
 
 	switch (opc) {
-	case 1:	/* MOV / MOVB */
+	case OP_MOV:
 		sa = opaddr(sm, sr, byte ? 1 : 2);
 		s = ldv(sa, byte);
 		da = opaddr(dm, dr, byte ? 1 : 2);
@@ -91,7 +91,7 @@ void double_op(uint16_t ir, int opc, int byte)
 			stv(da, s, 0);
 		}
 		return;
-	case 2:	/* CMP / CMPB: src - dst */
+	case OP_CMP:
 		sa = opaddr(sm, sr, byte ? 1 : 2);
 		s = ldv(sa, byte);
 		da = opaddr(dm, dr, byte ? 1 : 2);
@@ -101,7 +101,7 @@ void double_op(uint16_t ir, int opc, int byte)
 		fV = ((s ^ d) & (s ^ r) & sign) != 0;
 		fC = byte ? (s & 0xff) < (d & 0xff) : s < d;
 		return;
-	case 3:	/* BIT / BITB */
+	case OP_BIT:
 		sa = opaddr(sm, sr, byte ? 1 : 2);
 		s = ldv(sa, byte);
 		da = opaddr(dm, dr, byte ? 1 : 2);
@@ -109,7 +109,7 @@ void double_op(uint16_t ir, int opc, int byte)
 		nz(s & d, byte);
 		fV = 0;
 		return;
-	case 4:	/* BIC / BICB */
+	case OP_BIC:
 		sa = opaddr(sm, sr, byte ? 1 : 2);
 		s = ldv(sa, byte);
 		da = opaddr(dm, dr, byte ? 1 : 2);
@@ -119,7 +119,7 @@ void double_op(uint16_t ir, int opc, int byte)
 		fV = 0;
 		stv(da, r, byte);
 		return;
-	case 5:	/* BIS / BISB */
+	case OP_BIS:
 		sa = opaddr(sm, sr, byte ? 1 : 2);
 		s = ldv(sa, byte);
 		da = opaddr(dm, dr, byte ? 1 : 2);
@@ -129,7 +129,7 @@ void double_op(uint16_t ir, int opc, int byte)
 		fV = 0;
 		stv(da, r, byte);
 		return;
-	default: /* 6: ADD (word) / SUB (byte flag set) */
+	default:
 		sa = opaddr(sm, sr, 2);
 		s = ldv(sa, 0);
 		da = opaddr(dm, dr, 2);
@@ -158,7 +158,7 @@ static void eis_op(uint16_t ir)
 	uint32_t da;
 
 	switch ((ir >> 9) & 7) {
-	case 0: { /* MUL */
+	case EIS_MUL: {
 		int32_t res;
 
 		da = opaddr(dm, dr, 2);
@@ -172,19 +172,19 @@ static void eis_op(uint16_t ir)
 		fC = res < -32768 || res > 32767;
 		return;
 	}
-	case 1: { /* DIV */
+	case EIS_DIV: {
 		int64_t dv, q;
 		int16_t sv;
 
 		da = opaddr(dm, dr, 2);
 		sv = ldv(da, 0);
-		if (sv == 0) {		/* divide by zero */
+		if (sv == 0) {
 			fN = 0; fZ = 0; fV = 1; fC = 1;
 			return;
 		}
 		dv = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]);
 		q = dv / sv;
-		if (q > 32767 || q < -32768) {	/* overflow */
+		if (q > 32767 || q < -32768) {
 			fV = 1; fC = 0;
 			fN = dv < 0;
 			fZ = 0;
@@ -198,7 +198,7 @@ static void eis_op(uint16_t ir)
 		fC = 0;
 		return;
 	}
-	case 2: { /* ASH */
+	case EIS_ASH: {
 		int n, k;
 		int16_t v = R[rg], cur;
 
@@ -223,7 +223,7 @@ static void eis_op(uint16_t ir)
 		nz(R[rg], 0);
 		return;
 	}
-	case 3: { /* ASHC */
+	case EIS_ASHC: {
 		int n, k;
 		int32_t v = (int32_t)((uint32_t)R[rg] << 16 | R[rg | 1]), cur;
 
@@ -250,7 +250,7 @@ static void eis_op(uint16_t ir)
 		fZ = cur == 0;
 		return;
 	}
-	case 4: /* XOR */
+	case EIS_XOR:
 		da = opaddr(dm, dr, 2);
 		d = ldv(da, 0);
 		r = d ^ R[rg];
@@ -258,11 +258,10 @@ static void eis_op(uint16_t ir)
 		fV = 0;
 		stv(da, r, 0);
 		return;
-	case 7: /* SOB */
+	case EIS_SOB:
 		if (--R[rg] != 0) PC -= 2 * (ir & 077);
 		return;
 	}
-	/* 075xxx FIS and 076xxx CIS are not present on this CPU */
 	trap_sig(V4_SIGINS);
 }
 
@@ -277,19 +276,19 @@ void single_op(uint16_t ir, int byte)
 	uint32_t da;
 
 	switch ((ir >> 6) & 077) {
-	case 050: /* CLR */
+	case SOP_CLR:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		stv(da, 0, byte);
 		fN = 0; fZ = 1; fV = fC = 0;
 		return;
-	case 051: /* COM */
+	case SOP_COM:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ~ldv(da, byte);
 		stv(da, v, byte);
 		nz(v, byte);
 		fV = 0; fC = 1;
 		return;
-	case 052: /* INC */
+	case SOP_INC:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		fV = (v & m) == (sb - 1);
@@ -297,7 +296,7 @@ void single_op(uint16_t ir, int byte)
 		stv(da, v, byte);
 		nz(v, byte);
 		return;
-	case 053: /* DEC */
+	case SOP_DEC:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		fV = (v & m) == sb;
@@ -305,7 +304,7 @@ void single_op(uint16_t ir, int byte)
 		stv(da, v, byte);
 		nz(v, byte);
 		return;
-	case 054: /* NEG */
+	case SOP_NEG:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		fV = (v & m) == sb;
@@ -314,7 +313,7 @@ void single_op(uint16_t ir, int byte)
 		nz(v, byte);
 		fC = (v & m) != 0;
 		return;
-	case 055: /* ADC */
+	case SOP_ADC:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		c = fC;
@@ -324,7 +323,7 @@ void single_op(uint16_t ir, int byte)
 		stv(da, v, byte);
 		nz(v, byte);
 		return;
-	case 056: /* SBC */
+	case SOP_SBC:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		c = fC;
@@ -334,13 +333,13 @@ void single_op(uint16_t ir, int byte)
 		stv(da, v, byte);
 		nz(v, byte);
 		return;
-	case 057: /* TST */
+	case SOP_TST:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		nz(v, byte);
 		fV = fC = 0;
 		return;
-	case 060: /* ROR */
+	case SOP_ROR:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		nc = v & 1;
@@ -351,7 +350,7 @@ void single_op(uint16_t ir, int byte)
 		fC = nc;
 		fV = fN ^ fC;
 		return;
-	case 061: /* ROL */
+	case SOP_ROL:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		nc = (v & sb) != 0;
@@ -362,7 +361,7 @@ void single_op(uint16_t ir, int byte)
 		fC = nc;
 		fV = fN ^ fC;
 		return;
-	case 062: /* ASR */
+	case SOP_ASR:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		nc = v & 1;
@@ -372,7 +371,7 @@ void single_op(uint16_t ir, int byte)
 		fC = nc;
 		fV = fN ^ fC;
 		return;
-	case 063: /* ASL */
+	case SOP_ASL:
 		da = opaddr(dm, dr, byte ? 1 : 2);
 		v = ldv(da, byte);
 		nc = (v & sb) != 0;
@@ -382,8 +381,8 @@ void single_op(uint16_t ir, int byte)
 		fC = nc;
 		fV = fN ^ fC;
 		return;
-	case 064:
-		if (!byte) { /* MARK nn */
+	case SOP_MARK:
+		if (!byte) {
 			SP = PC + 2 * (ir & 077);
 			PC = R[5];
 			R[5] = pop();
@@ -393,7 +392,7 @@ void single_op(uint16_t ir, int byte)
 		da = opaddr(dm, dr, 1);
 		set_ps_cc(ldv(da, 1));
 		return;
-	case 065: /* MFPI / MFPD */
+	case SOP_MFPI:
 		if (byte) break;
 		da = opaddr(dm, dr, 2);
 		v = ldv(da, 0);
@@ -401,7 +400,7 @@ void single_op(uint16_t ir, int byte)
 		nz(v, 0);
 		fV = 0;
 		return;
-	case 066: /* MTPI / MTPD */
+	case SOP_MTPI:
 		if (byte) break;
 		v = pop();
 		da = opaddr(dm, dr, 2);
@@ -409,8 +408,8 @@ void single_op(uint16_t ir, int byte)
 		nz(v, 0);
 		fV = 0;
 		return;
-	case 067:
-		if (!byte) { /* SXT */
+	case SOP_SXT:
+		if (!byte) {
 			da = opaddr(dm, dr, 2);
 			stv(da, fN ? 0xffff : 0, 0);
 			fZ = !fN;
@@ -439,15 +438,15 @@ static void misc_op(uint16_t ir)
 	uint32_t da;
 
 	switch (ir >> 6) {
-	case 0:
+	case MISC_GRP_SPECIAL:
 		switch (ir) {
-		case 0000000:	/* HALT */
+		case OP_HALT:
 			trap_sig(V4_SIGBUS);
-		case 0000001:	/* WAIT */
-		case 0000005:	/* RESET */
+		case OP_WAIT:
+		case OP_RESET:
 			return;
-		case 0000002:	/* RTI */
-		case 0000006:	/* RTT */
+		case OP_RTI:
+		case OP_RTT:
 			t = pop();
 			{
 				uint16_t ps = pop();
@@ -456,28 +455,28 @@ static void misc_op(uint16_t ir)
 				set_ps_cc(ps);
 			}
 			return;
-		case 0000003:	/* BPT */
+		case OP_BPT:
 			trap_sig(V4_SIGTRC);
-		case 0000004:	/* IOT */
+		case OP_IOT:
 			trap_sig(V4_SIGIOT);
 		}
-		trap_sig(V4_SIGINS);	/* MFPT + unused */
-	case 1:	/* JMP */
+		trap_sig(V4_SIGINS);
+	case MISC_GRP_JMP:
 		da = opaddr(dm, dr, 2);
 		if (da & REGBIT) trap_sig(V4_SIGBUS);
 		PC = da;
 		return;
-	case 2:
-		if ((ir & 070) == 0) {	/* RTS */
+	case MISC_GRP_RTS:
+		if ((ir & OP_RTS_MASK) == OP_RTS_VAL) {
 			if (dr == 7 && UNLIKELY(trace & TR_FUNC))
 				trace_ret(SP);
 			PC = R[dr];
 			R[dr] = pop();
 			return;
 		}
-		if ((ir & 0177770) == 0000230)	/* SPL */
+		if ((ir & OP_SPL_MASK) == OP_SPL_VAL)
 			return;
-		if ((ir & 0177740) == 0000240) {	/* CCC/SCC/NOP */
+		if ((ir & OP_CC_MASK) == OP_CC_VAL) {
 			int set = ir & 020;
 
 			if (ir & 1) fC = set != 0;
@@ -487,7 +486,7 @@ static void misc_op(uint16_t ir)
 			return;
 		}
 		break;
-	case 3:	/* SWAB */
+	case MISC_GRP_SWAB:
 		da = opaddr(dm, dr, 2);
 		t = ldv(da, 0);
 		t = t >> 8 | t << 8;
@@ -506,7 +505,7 @@ static inline __attribute__((always_inline)) void step_one(void)
 
 	if (UNLIKELY(sig_pending || prof_scale || trace)) {
 		if (sig_pending) check_signals();
-		if (prof_scale && ++prof_tick >= 8192) {
+		if (prof_scale && ++prof_tick >= PROF_TICK_RATE) {
 			prof_tick = 0;
 			prof_sample();
 		}
@@ -518,37 +517,37 @@ static inline __attribute__((always_inline)) void step_one(void)
 	PC += 2;
 
 	switch (ir >> 12) {
-	case 1: double_op(ir, 1, 0); return;
-	case 2: double_op(ir, 2, 0); return;
-	case 3: double_op(ir, 3, 0); return;
-	case 4: double_op(ir, 4, 0); return;
-	case 5: double_op(ir, 5, 0); return;
-	case 6: double_op(ir, 6, 0); return;
-	case 9: double_op(ir, 1, 1); return;
-	case 10: double_op(ir, 2, 1); return;
-	case 11: double_op(ir, 3, 1); return;
-	case 12: double_op(ir, 4, 1); return;
-	case 13: double_op(ir, 5, 1); return;
-	case 14: double_op(ir, 6, 1); return;
-	case 7: eis_op(ir); return;
-	case 15: fstep(ir); return;		/* 17xxxx: fp */
-	case 0:
-		if (ir < 0000400) {
+	case GRP_MOV:  double_op(ir, OP_MOV,  0); return;
+	case GRP_CMP:  double_op(ir, OP_CMP,  0); return;
+	case GRP_BIT:  double_op(ir, OP_BIT,  0); return;
+	case GRP_BIC:  double_op(ir, OP_BIC,  0); return;
+	case GRP_BIS:  double_op(ir, OP_BIS,  0); return;
+	case GRP_ADD:  double_op(ir, OP_ADD,  0); return;
+	case GRP_MOVB: double_op(ir, OP_MOV,  1); return;
+	case GRP_CMPB: double_op(ir, OP_CMP,  1); return;
+	case GRP_BITB: double_op(ir, OP_BIT,  1); return;
+	case GRP_BICB: double_op(ir, OP_BIC,  1); return;
+	case GRP_BISB: double_op(ir, OP_BIS,  1); return;
+	case GRP_SUB:  double_op(ir, OP_ADD,  1); return;
+	case GRP_EIS:  eis_op(ir); return;
+	case GRP_FP:   fstep(ir); return;
+	case GRP_MISC:
+		if (ir < MISC_SPECIAL_LIMIT) {
 			misc_op(ir);
 			return;
 		}
-		if (ir < 0004000) {
-			switch (ir & 0177400) {
-			case 0000400: branch(1, ir); return;
-			case 0001000: branch(!fZ, ir); return;
-			case 0001400: branch(fZ, ir); return;
-			case 0002000: branch(!(fN ^ fV), ir); return;
-			case 0002400: branch(fN ^ fV, ir); return;
-			case 0003000: branch(!(fZ | (fN ^ fV)), ir); return;
+		if (ir < BRANCH_JSR_LIMIT) {
+			switch (ir & OP_LOW_MASK) {
+			case BR_BR:   branch(1, ir); return;
+			case BR_BNE:  branch(!fZ, ir); return;
+			case BR_BEQ:  branch(fZ, ir); return;
+			case BR_BGE:  branch(!(fN ^ fV), ir); return;
+			case BR_BLT:  branch(fN ^ fV, ir); return;
+			case BR_BGT:  branch(!(fZ | (fN ^ fV)), ir); return;
 			default:      branch(fZ | (fN ^ fV), ir); return;
 			}
 		}
-		if ((ir & 0177000) == 0004000) {	/* JSR */
+		if ((ir & OP_JSR_MASK) == OP_JSR_VAL) {
 			int rg = (ir >> 6) & 7;
 			uint16_t t;
 
@@ -569,17 +568,17 @@ static inline __attribute__((always_inline)) void step_one(void)
 		return;
 	}
 
-	switch (ir & 0177400) {
-	case 0100000: branch(!fN, ir); return;		/* BPL  */
-	case 0100400: branch(fN, ir); return;		    /* BMI  */
-	case 0101000: branch(!(fC | fZ), ir); return;	/* BHI  */
-	case 0101400: branch(fC | fZ, ir); return;	/* BLOS */
-	case 0102000: branch(!fV, ir); return;		/* BVC  */
-	case 0102400: branch(fV, ir); return;		    /* BVS  */
-	case 0103000: branch(!fC, ir); return;		/* BCC  */
-	case 0103400: branch(fC, ir); return;		    /* BCS  */
-	case 0104000: trap_sig(V4_SIGEMT);		    /* EMT  */
-	case 0104400: v4sys(ir & 077); return;		    /* TRAP */
+	switch (ir & OP_LOW_MASK) {
+	case BR_BPL:  branch(!fN, ir); return;
+	case BR_BMI:  branch(fN, ir); return;
+	case BR_BHI:  branch(!(fC | fZ), ir); return;
+	case BR_BLOS: branch(fC | fZ, ir); return;
+	case BR_BVC:  branch(!fV, ir); return;
+	case BR_BVS:  branch(fV, ir); return;
+	case BR_BCC:  branch(!fC, ir); return;
+	case BR_BCS:  branch(fC, ir); return;
+	case OP_EMT:  trap_sig(V4_SIGEMT);
+	case OP_TRAP: v4sys(ir & OP_TRAP_VEC_MASK); return;
 	}
 	single_op(ir, 1);
 }

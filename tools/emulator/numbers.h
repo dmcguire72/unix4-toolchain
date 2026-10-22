@@ -1,6 +1,114 @@
 #ifndef NUMBERS_H
 #define NUMBERS_H
 
+#pragma region CPU
+
+#define OP_MOV             1
+#define OP_CMP             2
+#define OP_BIT             3
+#define OP_BIC             4
+#define OP_BIS             5
+#define OP_ADD             6
+
+#define EIS_MUL            0
+#define EIS_DIV            1
+#define EIS_ASH            2
+#define EIS_ASHC           3
+#define EIS_XOR            4
+#define EIS_SOB            7
+
+#define SOP_CLR         0050
+#define SOP_COM         0051
+#define SOP_INC         0052
+#define SOP_DEC         0053
+#define SOP_NEG         0054
+#define SOP_ADC         0055
+#define SOP_SBC         0056
+#define SOP_TST         0057
+#define SOP_ROR         0060
+#define SOP_ROL         0061
+#define SOP_ASR         0062
+#define SOP_ASL         0063
+#define SOP_MARK        0064
+#define SOP_MTPS    SOP_MARK
+#define SOP_MFPI        0065
+#define SOP_MFPD    SOP_MFPI
+#define SOP_MTPI        0066
+#define SOP_MTPD    SOP_MTPI
+#define SOP_SXT         0067
+#define SOP_MFPS     SOP_SXT
+
+#define MISC_GRP_SPECIAL   0
+#define MISC_GRP_JMP       1
+#define MISC_GRP_RTS       2
+#define MISC_GRP_SWAB      3
+
+#define OP_HALT      0000000
+#define OP_WAIT      0000001
+#define OP_RTI       0000002
+#define OP_BPT       0000003
+#define OP_IOT       0000004
+#define OP_RESET     0000005
+#define OP_RTT       0000006
+
+#define OP_RTS_MASK   0000070
+#define OP_RTS_VAL    0000000
+#define OP_SPL_MASK  00177770
+#define OP_SPL_VAL    0000230
+#define OP_CC_MASK   00177740
+#define OP_CC_VAL     0000240
+
+#define GRP_MISC  0
+#define GRP_MOV   1
+#define GRP_CMP   2
+#define GRP_BIT   3
+#define GRP_BIC   4
+#define GRP_BIS   5
+#define GRP_ADD   6
+#define GRP_EIS   7
+#define GRP_MOVB  9
+#define GRP_CMPB  10
+#define GRP_BITB  11
+#define GRP_BICB  12
+#define GRP_BISB  13
+#define GRP_SUB   14
+#define GRP_FP    15
+
+#define MISC_SPECIAL_LIMIT  0000400
+#define BRANCH_JSR_LIMIT    0004000
+
+#define BR_BR    0000400
+#define BR_BNE   0001000
+#define BR_BEQ   0001400
+#define BR_BGE   0002000
+#define BR_BLT   0002400
+#define BR_BGT   0003000
+#define BR_BLE   0003400
+
+#define OP_JSR_MASK  00177000
+#define OP_JSR_VAL   0004000
+
+#define BR_BPL   0100000
+#define BR_BMI   0100400
+#define BR_BHI   0101000
+#define BR_BLOS  0101400
+#define BR_BVC   0102000
+#define BR_BVS   0102400
+#define BR_BCC   0103000
+#define BR_BCS   0103400
+#define OP_EMT   0104000
+#define OP_TRAP  0104400
+#define OP_TRAP_VEC_MASK  0000077
+
+#define PROF_TICK_RATE   8192
+#define OP_LOW_MASK      0177400
+
+#pragma endregion
+#pragma region FPU
+
+
+
+#pragma endregion
 #pragma region SIGNALS
 
 #define V4_SIGHUP    1

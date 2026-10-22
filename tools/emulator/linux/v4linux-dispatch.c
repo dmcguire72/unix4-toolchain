@@ -310,7 +310,6 @@ static inline int is_mountpoint(const char *path)
            (st.st_dev == st_parent.st_dev && st.st_ino == st_parent.st_ino);
 }
 
-
 int main(int argc, char *argv[])
 {
     if (argc < 2)
