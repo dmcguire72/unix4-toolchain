@@ -1,0 +1,45 @@
+CC = /opt/v4/sys/bin/cc
+AR = /opt/v4/sys/bin/ar
+
+CFLAGS = -O
+BIN = example/bin
+OBJ = example/obj
+
+PLAIN_PROGRAMS = char crash float hello
+LIB_PROGRAMS = crypttest alloctest
+
+TARGETS = $(PLAIN_PROGRAMS:%=$(BIN)/%) \
+          $(LIB_PROGRAMS:%=$(BIN)/%)
+
+.PHONY: all clean
+
+all: $(TARGETS)
+
+$(BIN) $(OBJ):
+	@mkdir -p $@
+
+define COMPILE_PROGRAM
+	@rm -f a.out
+	@echo "CC $(CFLAGS) $(1)"
+	@$(CC) $(CFLAGS) $(1); test -f a.out
+	@mv a.out $(2)
+endef
+
+$(PLAIN_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c | $(BIN)
+	$(call COMPILE_PROGRAM,$<,$@)
+
+$(LIB_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c $(OBJ)/lib.o | $(BIN)
+	$(call COMPILE_PROGRAM,$^,$@)
+
+$(OBJ)/lib.o: example/lib/allocator.c example/lib/io.c | $(OBJ)
+	@rm -f example/lib/allocator.o example/lib/io.o
+	@echo "CC $(CFLAGS) -c example/lib/allocator.c example/lib/io.c"
+	@$(CC) $(CFLAGS) -c example/lib/allocator.c example/lib/io.c; test -f example/lib/allocator.o && test -f example/lib/io.o
+	@mv example/lib/allocator.o example/lib/io.o $(OBJ)/
+	@echo "AR r $@ $(OBJ)/allocator.o $(OBJ)/io.o"
+	@$(AR) r $@ $(OBJ)/allocator.o $(OBJ)/io.o
+
+clean:
+	@rm -f $(TARGETS)
+	@rm -f $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.o
+	@rm -f example/lib/allocator.o example/lib/io.o a.out

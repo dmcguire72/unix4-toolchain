@@ -6,3 +6,4 @@ example/*.o
 example/bin
 a.out
 ttt.k
+/example/obj
