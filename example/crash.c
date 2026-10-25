@@ -1,6 +1,3 @@
-
-void (*bad_func)();
-
 crash_here()
 {
     return crash_here();
