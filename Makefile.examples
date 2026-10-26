@@ -1,3 +1,5 @@
+MAKEFLAGS += -r
+.SUFFIXES:
 CC11 = ./bin/cc11
 LD = /opt/v4/sys/bin/ld
 AR = /opt/v4/sys/bin/ar
@@ -46,6 +48,11 @@ $(OBJ)/%.o: example/%.c | $(OBJ)
 
 $(OBJ)/allocator.o: example/lib/allocator.c | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)
+
+$(OBJ)/pvm.o: extra/pvm/unix4/pvm.c extra/pvm/unix4/pvm-common.h | $(OBJ)
+	@cp extra/pvm/unix4/pvm-common.h example/pvm-common.h
+	$(call COMPILE_OBJECT,$<,$@)
+	@rm -f example/pvm-common.h
 
 $(OBJ)/io.o: example/lib/io.c | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)

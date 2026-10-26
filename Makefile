@@ -5,8 +5,6 @@ SRC = src
 BLD = build
 BIN = bin
 
-AS_CFLAGS = -std=gnu11 -O2 -Wall -Wno-unused-result
-
 PASS0 = $(SRC)/cc0.c $(SRC)/cc0t.c $(SRC)/ccrt.c
 TABLES = $(BLD)/regtab.c $(BLD)/efftab.c $(BLD)/cctab.c $(BLD)/sptab.c
 PASS1 = $(SRC)/cc1.c $(SRC)/cc1t.c $(SRC)/ccrt.c $(TABLES)
@@ -40,10 +38,10 @@ $(BIN) $(BLD):
 	mkdir -p $@
 
 $(BIN)/as: src/as1.c src/astab.c src/as.h tables/chartab.inc | $(BIN)
-	$(CC) $(AS_CFLAGS) -Isrc -o $@ src/as1.c src/astab.c
+	$(CC) $(CFLAGS) -Isrc -o $@ src/as1.c src/astab.c
 
 $(BIN)/as2: src/as2.c src/astab.c src/as.h | $(BIN)
-	$(CC) $(AS_CFLAGS) -Isrc -o $@ src/as2.c src/astab.c
+	$(CC) $(CFLAGS) -Isrc -o $@ src/as2.c src/astab.c
 
 $(BIN)/cvopt: $(SRC)/cvopt.c | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $<
