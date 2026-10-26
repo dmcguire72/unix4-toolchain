@@ -1,5 +1,5 @@
 /*
- * Unix Fourth Edition -- cc11.c -- cc
+ * Unix Fourth Edition -- cc11.c -- cc (1)
  * 
  * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
