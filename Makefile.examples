@@ -10,7 +10,7 @@ BIN = example/bin
 OBJ = example/obj
 
 PLAIN_PROGRAMS = char crash float quine
-LIB_PROGRAMS = crypttest alloctest hello pvm
+LIB_PROGRAMS = crypttest alloctest hello
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
 TARGETS = $(PROGRAMS:%=$(BIN)/%)
