@@ -114,7 +114,15 @@ as2 <tmp1> <tmp2> <tmp3> <tmp4> [-g]
 
 A port for LD is currently being planned
 
-## D. Userspace emulator
+## D. AR
+
+A port for AR is currently being planned
+
+## E. STRIP
+
+A port for STRIP is currently being planned
+
+## F. Userspace emulator
 
 The userspace emulator translates Unix V4 syscalls to POSIX, and handles host integrations.
 
@@ -175,6 +183,24 @@ usr
 % cat file.txt | /host/usr/bin/grep hello
 hello world
 ```
+
+## G. Disassembler
+
+### A. v4dis
+
+```bash
+dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
+```
+
+#### Disassembler Options
+
+- `-a`: Enable address and octal instruction word comments aligned to column 40 in disassembly.
+- `-k`: Allows privileged/kernel instructions (e.g., `halt`, `spl`, `reset`, `rti`, `rtt`) that are invalid in user-mode binaries.
+- `-n`: Disable automatic text-to-data padding. By default, pure text binaries (`0410` NMAGIC) emit `.=.+...` padding to preserve the 8KB boundary for the `.data` segment.
+- `-s`: Scans function prologues (for both standard C register-saving routines like `csv` and also manual frame setups) to make inferred C function prototype comments (e.g., `/ int name(int a0, int a1);`).
+- `-v`: Emits stats out to `stderr`, which includes label allocation budgets, code/data byte distributions, and speculative walk validation counts.
+- `-L <labels>`: Maximum label budget (defaults to 700). Sets the limit on synthesized local labels (`L...`, `F...`, `D...`, `B...`) to avoid crashing the V4 assembler.
+- `<a.out>`: Input PDP-11 Unix V4 binary (`0407` executable or `0410` pure executable, use 'file <a.out>' for info).
 
 ---
 
