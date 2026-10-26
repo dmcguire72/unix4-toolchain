@@ -1,25 +1,21 @@
 CC11 = ./bin/cc11
-LD = /opt/v4/sys/bin/cc
-AS = /opt/v4/sys/bin/as
+LD = /opt/v4/sys/bin/ld
 AR = /opt/v4/sys/bin/ar
 STRIP = /opt/v4/sys/bin/strip
+CRT0 = /opt/v4/sys/lib/crt0.o
+LIBS = /opt/v4/sys/lib/libc.a /opt/v4/sys/lib/liba.a /opt/v4/sys/lib/libc.a
 
 CFLAGS =
 BIN = example/bin
 OBJ = example/obj
 
-LIB_PROGRAMS = crypttest alloctest hello
 PLAIN_PROGRAMS = char crash float quine
+LIB_PROGRAMS = crypttest alloctest hello pvm
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
 TARGETS = $(PROGRAMS:%=$(BIN)/%)
 OBJECTS = $(PROGRAMS:%=$(OBJ)/%.o) \
           $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.o
-
-GENERATED_ASM = $(PROGRAMS:%=example/%.s) \
-                example/lib/allocator.s example/lib/io.s \
-                $(PROGRAMS:%=$(OBJ)/%.s) \
-                $(OBJ)/allocator.s $(OBJ)/io.s
 
 .PHONY: all clean strip
 
@@ -35,28 +31,24 @@ $(BIN) $(OBJ):
 	@mkdir -p $@
 
 define COMPILE_OBJECT
-	@rm -f a.out $(basename $(1)).s $(@:.o=.s) $@
-	@echo "CC -S $(CFLAGS) $(1)"
-	@$(CC11) -S $(CFLAGS) $(1) || exit $$?
-	@test -f $(basename $(1)).s
-	@mv $(basename $(1)).s $(@:.o=.s)
-	@echo "AS $(@:.o=.s)"
-	@output=$$($(AS) -g $(@:.o=.s) 2>&1); status=$$?; \
-		if test -n "$$output" || test ! -f a.out || \
-		   { test $$status -ne 0 && test $$status -ne 2; }; then \
-			rm -f a.out; exit 1; \
-		fi; \
-		mv a.out $@
+	@rm -f a.out $(basename $(1)).o $(2)
+	@echo "CC $(CFLAGS) -c $(1)"
+	@$(CC11) $(CFLAGS) -c $(1) || true
+	@test -s $(basename $(1)).o || { \
+		echo "CC failed: no object generated"; \
+		exit 1; \
+	}
+	@mv $(basename $(1)).o $(2)
 endef
 
 $(OBJ)/%.o: example/%.c | $(OBJ)
-	$(call COMPILE_OBJECT,$<)
+	$(call COMPILE_OBJECT,$<,$@)
 
 $(OBJ)/allocator.o: example/lib/allocator.c | $(OBJ)
-	$(call COMPILE_OBJECT,$<)
+	$(call COMPILE_OBJECT,$<,$@)
 
 $(OBJ)/io.o: example/lib/io.c | $(OBJ)
-	$(call COMPILE_OBJECT,$<)
+	$(call COMPILE_OBJECT,$<,$@)
 
 $(OBJ)/lib.o: $(OBJ)/allocator.o $(OBJ)/io.o
 	@rm -f $@
@@ -65,8 +57,12 @@ $(OBJ)/lib.o: $(OBJ)/allocator.o $(OBJ)/io.o
 
 define LINK_PROGRAM
 	@rm -f a.out
-	@echo "LD $(1)"
-	@$(LD) $(1); test -f a.out
+	@echo "LD $(CRT0) $(1) $(LIBS)"
+	@$(LD) $(CRT0) $(1) $(LIBS) || true
+	@test -s a.out || { \
+		echo "LD failed: no executable generated"; \
+		exit 1; \
+	}
 	@mv a.out $(2)
 endef
 
@@ -78,4 +74,5 @@ $(LIB_PROGRAMS:%=$(BIN)/%): $(BIN)/%: $(OBJ)/%.o $(OBJ)/lib.o | $(BIN)
 
 clean:
 	@rm -f $(TARGETS) $(OBJECTS) a.out
-	@rm -f $(GENERATED_ASM)
+	@rm -f $(PROGRAMS:%=example/%.o)
+	@rm -f example/lib/allocator.o example/lib/io.o

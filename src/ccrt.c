@@ -1,5 +1,11 @@
 /*
+ * Unix Fourth Edition -- crt.c
+ * 
+ * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
+ * 
+ * Modernized Port:
+ * Copyright 2026 Daniel McGuire
  */
 #include "ccw.h"
 #include <stdarg.h>

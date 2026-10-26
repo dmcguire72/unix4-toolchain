@@ -1,5 +1,11 @@
 /*
+ * Unix Fourth Edition -- cc0.c -- c0
+ * 
+ * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
+ * 
+ * Modernized Port:
+ * Copyright 2026 Daniel McGuire
  */
 #include "cc0.h"
 #include <math.h>

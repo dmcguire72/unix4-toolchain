@@ -1,5 +1,11 @@
 /*
+ * Unix Fourth Edition -- cc1.h
+ * 
+ * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
+ * 
+ * Modernized Port:
+ * Copyright 2026 Daniel McGuire
  */
 #ifndef CC1_H
 #define CC1_H

@@ -1,5 +1,11 @@
 /*
+ * Unix Fourth Edition -- ccw.h
+ * 
+ * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
+ * 
+ * Modernized Port:
+ * Copyright 2026 Daniel McGuire
  */
 #ifndef CCW_H
 #define CCW_H

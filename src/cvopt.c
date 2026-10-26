@@ -1,5 +1,11 @@
 /*
+ * Unix Fourth Edition -- cvopt.c
+ * 
+ * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
+ * 
+ * Modernized Port:
+ * Copyright 2026 Daniel McGuire
  */
 #include <ctype.h>
 #include <stdio.h>

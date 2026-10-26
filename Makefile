@@ -1,37 +1,49 @@
-CC	= cc
-CFLAGS	= -std=gnu11 -O3 -Wall -Wno-unused-result
-SRC	= src
-BLD	= build
-BIN	= bin
+CC = cc
+CFLAGS = -std=gnu11 -O3 -Wall -Wno-unused-result
 
-PASS0	= $(SRC)/cc0.c $(SRC)/cc0t.c $(SRC)/ccrt.c
-TABLES	= $(BLD)/regtab.c $(BLD)/efftab.c $(BLD)/cctab.c $(BLD)/sptab.c
-PASS1	= $(SRC)/cc1.c $(SRC)/cc1t.c $(SRC)/ccrt.c $(TABLES)
+SRC = src
+BLD = build
+BIN = bin
+
+AS_CFLAGS = -std=gnu11 -O2 -Wall -Wno-unused-result
+
+PASS0 = $(SRC)/cc0.c $(SRC)/cc0t.c $(SRC)/ccrt.c
+TABLES = $(BLD)/regtab.c $(BLD)/efftab.c $(BLD)/cctab.c $(BLD)/sptab.c
+PASS1 = $(SRC)/cc1.c $(SRC)/cc1t.c $(SRC)/ccrt.c $(TABLES)
 
 EMULATOR_SRC = \
-    tools/emulator/main.c \
+	tools/emulator/main.c \
 	tools/emulator/options.c \
 	tools/emulator/program.c \
 	tools/emulator/script.c \
 	tools/emulator/filesystem.c \
-    tools/emulator/state.c \
-    tools/emulator/memory.c \
-    tools/emulator/loader.c \
-    tools/emulator/syscalls.c \
+	tools/emulator/state.c \
+	tools/emulator/memory.c \
+	tools/emulator/loader.c \
+	tools/emulator/syscalls.c \
 	tools/emulator/signals.c \
-    tools/emulator/fpu.c \
-    tools/emulator/cpu.c \
+	tools/emulator/fpu.c \
+	tools/emulator/cpu.c \
 	tools/emulator/trace.c \
 	tools/emulator/symbols.c \
 	tools/emulator/hooks.c
 
 EMULATOR_HDR = tools/emulator/pdp11.h
 
+all: $(BIN)/as $(BIN)/as2 \
+     $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 \
+     emulator
+
 emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis
-all: $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 emulator
 
 $(BIN) $(BLD):
 	mkdir -p $@
+
+$(BIN)/as: src/as1.c src/astab.c src/as.h tables/chartab.inc | $(BIN)
+	$(CC) $(AS_CFLAGS) -Isrc -o $@ src/as1.c src/astab.c
+
+$(BIN)/as2: src/as2.c src/astab.c src/as.h | $(BIN)
+	$(CC) $(AS_CFLAGS) -Isrc -o $@ src/as2.c src/astab.c
 
 $(BIN)/cvopt: $(SRC)/cvopt.c | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $<
@@ -57,14 +69,42 @@ $(BIN)/v4dis: tools/v4dis/v4dis.c | $(BIN)
 $(BIN)/v4linux-dispatch: tools/emulator/linux/v4linux-dispatch.c | $(BIN)
 	$(CC) $(CFLAGS) -o $@ $<
 
-check: all
+check-as: all
 	@fail=0; t=$$(mktemp -d); \
-	for f in tests/src/*.c; do n=$$(basename $$f .c); \
-	  cp $$f $$t/$$n.c; \
-	  (cd $$t && $(CURDIR)/$(BIN)/cc11 -S $$n.c >/dev/null 2>&1); \
-	  if cmp -s $$t/$$n.s tests/expected/$$n.s; then echo "ok   $$n"; \
-	  else echo "FAIL $$n"; fail=1; fi; \
-	done; rm -rf $$t; exit $$fail
+	for f in tests/src/*.s; do \
+		n=$$(basename $$f .s); \
+		rm -rf $$t/w; mkdir -p $$t/w; cp $$f $$t/w/in.s; \
+		(cd $$t/w && TMPDIR=$$t/w $(CURDIR)/$(BIN)/as in.s >out.txt 2>&1); \
+		ok=1; \
+		if [ -f tests/expected/$$n.out ]; then \
+			cmp -s $$t/w/a.out tests/expected/$$n.out || ok=0; \
+		else \
+			[ ! -f $$t/w/a.out ] || ok=0; \
+		fi; \
+		cmp -s $$t/w/out.txt tests/expected/$$n.err || ok=0; \
+		if [ $$ok = 1 ]; then \
+			echo "ok $$n"; \
+		else \
+			echo "FAIL $$n"; fail=1; \
+		fi; \
+	done; \
+	rm -rf $$t; exit $$fail
+
+check-cc: all
+	@fail=0; t=$$(mktemp -d); \
+	for f in tests/src/*.c; do \
+		n=$$(basename $$f .c); \
+		cp $$f $$t/$$n.c; \
+		(cd $$t && $(CURDIR)/$(BIN)/cc11 -S $$n.c >/dev/null 2>&1); \
+		if cmp -s $$t/$$n.s tests/expected/$$n.s; then \
+			echo "ok $$n"; \
+		else \
+			echo "FAIL $$n"; fail=1; \
+		fi; \
+	done; \
+	rm -rf $$t; exit $$fail
+
+check: check-as check-cc
 
 dis-check: $(BIN)/v4dis $(BIN)/v4linux
 	python3 tools/v4dis/roundtrip.py --v4dis $(BIN)/v4dis --emu $(BIN)/v4linux --root v4 --scan v4
@@ -72,4 +112,4 @@ dis-check: $(BIN)/v4dis $(BIN)/v4linux
 clean:
 	rm -rf $(BIN) $(BLD)
 
-.PHONY: all emulator check dis-check clean
+.PHONY: all emulator check check-as check-cc dis-check clean

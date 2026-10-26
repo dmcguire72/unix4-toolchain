@@ -1,5 +1,11 @@
 /*
+ * Unix Fourth Edition -- cc11.c -- cc
+ * 
+ * Original:
  * Copyright 1972, 1973 Bell Telephone Laboratories, Inc.
+ * 
+ * Modernized Port:
+ * Copyright 2026 Daniel McGuire
  */
 #include <errno.h>
 #include <limits.h>
