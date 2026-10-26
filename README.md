@@ -2,11 +2,13 @@
 
 This repository contains a few components:
 
-- A. CC for Linux (targetting Unix v4 for the PDP-11)
-- B. AS for Linux (targetting Unix v4 for the PDP-11)
-- C. LD for Linux (targetting Unix v4 for the PDP-11) [soon]
-- D. A Unix v4 userspace emulation component using binfmt_misc, syscall translation, and a minimal PDP-11 CPU/FPU emulator.
-- E. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
+- A. CC for Linux (targetting Unix v4 with PDP-11 assembly)
+- B. AS for Linux (targetting Unix v4 with the PDP-11 a.out file format)
+- C. LD for Linux (targetting Unix v4 for the PDP-11 a.out file format) [soon]
+- D. AR for Linux (targetting Unix v4 for the PDP-11 a.out file format) [soon]
+- E. STRIP for Linux (targetting the Unix v4 symbols in PDP-11 a.out file format) [soon]
+- F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.
+- G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
 
 ## A. CC
 
@@ -116,7 +118,7 @@ A port for LD is currently being planned
 
 The userspace emulator translates Unix V4 syscalls to POSIX, and handles host integrations.
 
-Like any other executable format, do not trust unknown PDP-11 a.out executables or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
+Like any other executable file format, do not trust unknown PDP-11 a.out executables (can be identified via the file command) or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
 
 ### Setting up the emulator
 
