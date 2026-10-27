@@ -1,0 +1,34 @@
+# name | ld arguments
+# Inputs are assembled from tests/ld/src/*.s (u1.o, u2.o, m.o, f.o, g.o, h1..h4.o),
+# lib.a is a fixture built by the original V4 ar from h1..h4.
+# Generated inputs: junk.o (text), trunc.o/trunc2.o/trunc3.o (f.o cut at 100/20/10
+# bytes), tlib.a (lib.a cut at 200 bytes), linked.o (output of "ld m.o f.o", which
+# has no relocation bits).
+undef            | u1.o u2.o
+plain            | m.o f.o
+n                | -n m.o f.o
+s                | -s m.o f.o
+x                | -x m.o f.o
+d                | -d m.o f.o
+r                | -r m.o f.o
+ns               | -n -s m.o f.o
+rx               | -r -x m.o f.o
+undef_only       | m.o
+use              | -u _bar m.o f.o
+entry            | -e _foo m.o f.o
+entry2           | -e start -e _foo m.o f.o
+multi            | m.o f.o g.o
+nofile           | m.o nosuch.o f.o
+junk             | m.o junk.o
+ar_end           | m.o f.o lib.a
+ar_mid           | m.o lib.a f.o
+ar_twice         | m.o f.o lib.a lib.a
+ar_only          | m.o lib.a
+ar_use           | -u _baz lib.a m.o f.o
+ar_use_none      | -u _never m.o f.o lib.a
+ar_r             | -r m.o lib.a
+trunc            | m.o trunc.o
+trunc2           | m.o trunc2.o
+trunc3           | m.o trunc3.o
+tlib             | m.o f.o tlib.a
+norel            | linked.o g.o

@@ -409,6 +409,26 @@ callsys(const char *f, char **v)
 }
 
 static void
+resolve_lib_path(char *dest, const char *filename)
+{
+	char path[PATH_MAX];
+
+	snprintf(path, sizeof path, "%s/%s", libdir, filename);
+	if (access(path, F_OK) == 0) {
+		snprintf(dest, PATH_MAX, "%s", path);
+		return;
+	}
+
+	snprintf(path, sizeof path, "/opt/v4/sys/lib/%s", filename);
+	if (access(path, F_OK) == 0) {
+		snprintf(dest, PATH_MAX, "%s", path);
+		return;
+	}
+
+	snprintf(dest, PATH_MAX, "%s/%s", libdir, filename);
+}
+
+static void
 findlayout(const char *argv0)
 {
 	char exe[PATH_MAX];
@@ -434,7 +454,7 @@ findlayout(const char *argv0)
 	snprintf(pass2c, sizeof pass2c, "%s/c2", bindir);
 	snprintf(asprog, sizeof asprog, "%s/as", bindir);
 	snprintf(ldprog, sizeof ldprog, "%s/ld", bindir);
-	snprintf(pref, sizeof pref, "%s/crt0.o", libdir);
+	resolve_lib_path(pref, "crt0.o");
 }
 
 int
@@ -461,7 +481,7 @@ main(int argc, char **argv)
 				break;
 			case 'p':
 				proflag++;
-				snprintf(pref, sizeof pref, "%s/mcrt0.o", libdir);
+				resolve_lib_path(pref, "mcrt0.o");
 				break;
 			case 'P':
 				pflag++;
@@ -470,9 +490,9 @@ main(int argc, char **argv)
 				break;
 			case '2':
 				if (argv[i][2] == '\0')
-					snprintf(pref, sizeof pref, "%s/crt2.o", libdir);
+					resolve_lib_path(pref, "crt2.o");
 				else {
-					snprintf(pref, sizeof pref, "%s/crt20.o", libdir);
+					resolve_lib_path(pref, "crt20.o");
 					f20 = 1;
 				}
 				break;

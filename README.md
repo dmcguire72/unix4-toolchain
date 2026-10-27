@@ -112,7 +112,21 @@ as2 <tmp1> <tmp2> <tmp3> <tmp4> [-g]
 
 ## C. LD
 
-A port for LD is currently being planned
+```bash
+ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
+```
+
+#### LD Options
+
+- -s: Squash: write no symbol table at all (implies -x).
+- -n: Make the text read-only/shareable: magic 0410, text rounded to 64 bytes, data starting on an 8K boundary.
+- -x: Do not enter local symbols in the output symbol table.
+- -r: Keep relocation bits so the output can be linked again (partial link). This also happens automatically if undefined symbols remain.
+- -d: Define common regions (and `_end`, `_etext`, `_edata`) even when relocation bits are kept.
+- -u sym: Enter `sym` as undefined so that an archive member defining it is loaded.
+- -e sym: Use `sym` as the entry point.
+- -l: Search the library `liba.a`; `-lx` searches `libx.a` (only the first letter after `-l` is used, so `-l2` is `lib2.a` for instance.)
+- file ...: Object files (.o) and/or archives (.a). Archive members are only loaded if they define a symbol that is currently undefined, so order matters. Unknown `-` options are ignored, as in the original.
 
 ## D. AR
 
@@ -165,6 +179,10 @@ setup complete.
 ```
 
 From there, you can use Unix v4 programs inside Linux:
+
+> [!NOTE]
+>
+>If you experience issues with original V4 binaries, file an issue, and a patch for emulator (or a symbol hook) will be looked into!
 
 ```bash
 $ /opt/v4/sys/bin/sh

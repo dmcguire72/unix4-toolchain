@@ -1,7 +1,7 @@
 MAKEFLAGS += -r
 .SUFFIXES:
 CC11 = ./bin/cc11
-LD = /opt/v4/sys/bin/ld
+LD = ./bin/ld
 AR = /opt/v4/sys/bin/ar
 STRIP = /opt/v4/sys/bin/strip
 CRT0 = /opt/v4/sys/lib/crt0.o
