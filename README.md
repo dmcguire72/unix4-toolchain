@@ -164,7 +164,7 @@ To get started:
 
 > [!NOTE]
 >
-> [https://danielm.pages.dev/useful/unix_v4_debug.tar.xz](https://danielm.pages.dev/useful/unix_v4_debug.tar.xz) contains unstripped symbol rebuilds for most* of the binaries. Symbols allow both hook based patches to work (fixing time properly), and for more readable stacktraces in most cases of failure. The URL below contains the original image, modified only to remove root nesting to limit the amount of commands to extract.
+> [https://danielm.pages.dev/useful/unix_v4_debug.tar.xz](https://danielm.pages.dev/useful/unix_v4_debug.tar.xz) contains unstripped symbol rebuilds for most* of the binaries. Symbols allow both hook based patches to work (fixing time properly), and for more readable stacktraces in most cases of failure. The URL below in the code block however contains the original image, modified only to remove root nesting to limit the amount of commands to extract.
 >
 > <sub>*All binaries with identical code segments when rebuilt were kept.</sub>
 
