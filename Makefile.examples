@@ -1,23 +1,28 @@
 MAKEFLAGS += -r
 .SUFFIXES:
+
 CC11 = ./bin/cc11
-LD = ./bin/ld
 AR = /opt/v4/sys/bin/ar
 STRIP = /opt/v4/sys/bin/strip
-CRT0 = /opt/v4/sys/lib/crt0.o
-LIBS = /opt/v4/sys/lib/libc.a /opt/v4/sys/lib/liba.a /opt/v4/sys/lib/libc.a
 
 CFLAGS =
 BIN = example/bin
 OBJ = example/obj
+
+ifeq ($(V),1)
+  Q :=
+  ECHO := @:
+else
+  Q := @
+  ECHO := @printf "  %-7s %s\n"
+endif
 
 PLAIN_PROGRAMS = char crash float quine
 LIB_PROGRAMS = crypttest alloctest hello
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
 TARGETS = $(PROGRAMS:%=$(BIN)/%)
-OBJECTS = $(PROGRAMS:%=$(OBJ)/%.o) \
-          $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.o
+OBJECTS = $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.o
 
 .PHONY: all clean strip
 
@@ -25,61 +30,64 @@ all: $(TARGETS)
 
 strip: all
 	@for f in $(TARGETS); do \
-		echo "STRIP $$f"; \
+		if [ "$(V)" = "1" ]; then \
+			echo $(STRIP) "$$f"; \
+		else \
+			printf "  %-7s %s\n" STRIP "$$f"; \
+		fi; \
 		$(STRIP) "$$f" || true; \
 	done
 
 $(BIN) $(OBJ):
-	@mkdir -p $@
+	$(ECHO) MKDIR $@
+	$(Q)mkdir -p $@
 
 define COMPILE_OBJECT
-	@rm -f a.out $(basename $(1)).o $(2)
-	@echo "CC $(CFLAGS) -c $(1)"
-	@$(CC11) $(CFLAGS) -c $(1) || true
-	@test -s $(basename $(1)).o || { \
-		echo "CC failed: no object generated"; \
+	$(ECHO) CC $(2)
+	$(Q)rm -f a.out $(basename $(1)).o $(2)
+	$(Q)$(CC11) $(CFLAGS) -c $(1) || true
+	$(Q)test -s $(basename $(1)).o || { \
+		echo "CC failed: no object generated for $(1)"; \
 		exit 1; \
 	}
-	@mv $(basename $(1)).o $(2)
+	$(Q)mv $(basename $(1)).o $(2)
 endef
 
-$(OBJ)/%.o: example/%.c | $(OBJ)
-	$(call COMPILE_OBJECT,$<,$@)
+define BUILD_BINARY
+	$(ECHO) CC $(2)
+	$(Q)rm -f a.out $(2)
+	$(Q)$(CC11) $(CFLAGS) $(1) || true
+	$(Q)test -s a.out || { \
+		echo "CC failed: no executable generated for $(2)"; \
+		exit 1; \
+	}
+	$(Q)mv a.out $(2)
+endef
 
 $(OBJ)/allocator.o: example/lib/allocator.c | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)
 
-$(OBJ)/pvm.o: extra/pvm/unix4/pvm.c extra/pvm/unix4/pvm-common.h | $(OBJ)
-	@cp extra/pvm/unix4/pvm-common.h example/pvm-common.h
-	$(call COMPILE_OBJECT,$<,$@)
-	@rm -f example/pvm-common.h
-
 $(OBJ)/io.o: example/lib/io.c | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)
 
+$(OBJ)/pvm.o: extra/pvm/unix4/pvm.c extra/pvm/unix4/pvm-common.h | $(OBJ)
+	$(Q)cp extra/pvm/unix4/pvm-common.h example/pvm-common.h
+	$(call COMPILE_OBJECT,$<,$@)
+	$(Q)rm -f example/pvm-common.h
+
 $(OBJ)/lib.o: $(OBJ)/allocator.o $(OBJ)/io.o
-	@rm -f $@
-	@echo "AR r $@ $(OBJ)/allocator.o $(OBJ)/io.o"
-	@$(AR) r $@ $(OBJ)/allocator.o $(OBJ)/io.o
+	$(ECHO) AR $@
+	$(Q)rm -f $@
+	$(Q)$(AR) r $@ $(OBJ)/allocator.o $(OBJ)/io.o
 
-define LINK_PROGRAM
-	@rm -f a.out
-	@echo "LD $(CRT0) $(1) $(LIBS)"
-	@$(LD) $(CRT0) $(1) $(LIBS) || true
-	@test -s a.out || { \
-		echo "LD failed: no executable generated"; \
-		exit 1; \
-	}
-	@mv a.out $(2)
-endef
+$(PLAIN_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c | $(BIN)
+	$(call BUILD_BINARY,$<,$@)
 
-$(PLAIN_PROGRAMS:%=$(BIN)/%): $(BIN)/%: $(OBJ)/%.o | $(BIN)
-	$(call LINK_PROGRAM,$^,$@)
-
-$(LIB_PROGRAMS:%=$(BIN)/%): $(BIN)/%: $(OBJ)/%.o $(OBJ)/lib.o | $(BIN)
-	$(call LINK_PROGRAM,$^,$@)
+$(LIB_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c $(OBJ)/lib.o | $(BIN)
+	$(call BUILD_BINARY,$^,$@)
 
 clean:
-	@rm -f $(TARGETS) $(OBJECTS) a.out
-	@rm -f $(PROGRAMS:%=example/%.o)
-	@rm -f example/lib/allocator.o example/lib/io.o
+	$(ECHO) CLEAN "$(BIN) $(OBJ)"
+	$(Q)rm -f $(TARGETS) $(OBJECTS) a.out
+	$(Q)rm -f $(PROGRAMS:%=example/%.o)
+	$(Q)rm -f example/lib/allocator.o example/lib/io.o
