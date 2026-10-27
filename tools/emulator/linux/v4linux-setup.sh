@@ -16,6 +16,8 @@ BINFMT_DIR=/proc/sys/fs/binfmt_misc
 BINFMT_MARKER=/run/v4-binfmt-mounted-by-v4linux
 RUNTIME_SCRIPT="$PDP11_DEST/v4linux-runtime"
 
+REQUIRED_TOOLS=(as as2 cc0 cc1 cc11 ld v4dis)
+
 usage() {
     cat <<'USAGE'
 Usage: sudo ./v4linux-setup.sh /path/to/extracted-v4-root /path/to/v4linux-bin-dir
@@ -49,6 +51,11 @@ BIN_SOURCE=$(realpath -e -- "$2") || die "cannot resolve bin source: $2"
 
 [[ -x "$BIN_SOURCE/v4linux-dispatch" && -f "$BIN_SOURCE/v4linux-dispatch" ]] ||
     die "expected executable $BIN_SOURCE/v4linux-dispatch"
+
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    [[ -f "$BIN_SOURCE/$tool" ]] ||
+        die "expected file $BIN_SOURCE/$tool"
+done
 
 check_not_nested() {
     local src=$1
@@ -94,6 +101,15 @@ fi
     die "installed emulator is not executable: $PDP11_DEST/v4linux"
 
 install -m 0755 "$BIN_SOURCE/v4linux-dispatch" "$DISPATCH_DEST"
+
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    case "$tool" in
+        cc11)  link_name="v4-cc" ;;
+        v4dis) link_name="v4-dis" ;;
+        *)     link_name="v4-$tool" ;;
+    esac
+    ln -sf "$PDP11_DEST/$tool" "/usr/bin/$link_name"
+done
 
 if ! mountpoint -q "$BINFMT_DIR"; then
     modprobe binfmt_misc 2>/dev/null || true

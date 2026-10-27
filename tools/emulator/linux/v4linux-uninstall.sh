@@ -20,12 +20,14 @@ PURGE_BIN=0
 
 usage() {
     cat <<'USAGE'
-Usage: sudo ./v4linux-uninstall.sh [--purge-v4]
+Usage: sudo ./v4linux-uninstall.sh [--purge-v4] [--purge-bin] [--purge-all]
 
 Unregister v4linux handlers, unmount the V4 host/overlay mounts, and
-remove the installed dispatcher.
+remove the installed dispatcher and tool symlinks.
 
-  --purge-v4   Also delete /opt/v4
+  --purge-v4    Also delete /opt/v4/sys
+  --purge-bin   Also delete /opt/v4/bin
+  --purge-all   Delete both /opt/v4/sys and /opt/v4/bin
 USAGE
 }
 
@@ -84,6 +86,16 @@ rmdir "$HOST_STAGING" 2>/dev/null || true
 rmdir "$GUEST_ROOT" 2>/dev/null || true
 rm -f -- "$DISPATCH_DEST"
 
+# Remove tool symlinks
+for tool in as as2 cc0 cc1 cc11 ld v4dis; do
+    case "$tool" in
+        cc11)  link_name="v4-cc" ;;
+        v4dis) link_name="v4-dis" ;;
+        *)     link_name="v4-$tool" ;;
+    esac
+    rm -f -- "/usr/bin/$link_name"
+done
+
 if [[ -e "$BINFMT_MARKER" ]] && mountpoint -q "$BINFMT_DIR"; then
     other_handler=0
     for entry in "$BINFMT_DIR"/*; do
@@ -104,9 +116,16 @@ else
     rm -f -- "$BINFMT_MARKER"
 fi
 
+if (( PURGE_BIN )); then
+    rm -rf -- "$PDP11_DEST"
+    echo "Removed $PDP11_DEST"
+fi
+
 if (( PURGE_V4 )); then
     rm -rf -- "$V4_DEST"
     echo "Removed $V4_DEST"
 fi
 
-echo "v4linux binfmt integration uninstalled."
+rmdir /opt/v4 2>/dev/null || true
+
+echo "v4linux uninstalled."
