@@ -1,9 +1,4 @@
 # name | ld arguments
-# Inputs are assembled from tests/ld/src/*.s (u1.o, u2.o, m.o, f.o, g.o, h1..h4.o),
-# lib.a is a fixture built by the original V4 ar from h1..h4.
-# Generated inputs: junk.o (text), trunc.o/trunc2.o/trunc3.o (f.o cut at 100/20/10
-# bytes), tlib.a (lib.a cut at 200 bytes), linked.o (output of "ld m.o f.o", which
-# has no relocation bits).
 undef            | u1.o u2.o
 plain            | m.o f.o
 n                | -n m.o f.o

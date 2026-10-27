@@ -1,0 +1,11 @@
+ar t lib.a
+ar tv lib.a
+ar xv lib.a
+ar rv new.a h1.o h4.o
+ar t new.a
+ar uv lib.a h1.o
+ar dv lib.a h2.o h3.o
+ar rv lib.a h1.o
+ar tv lib.a
+ar d lib.a h4.o
+ar t lib.a

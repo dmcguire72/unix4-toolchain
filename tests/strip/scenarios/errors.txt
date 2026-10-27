@@ -1,0 +1,6 @@
+strip text.txt
+strip empty
+strip two
+strip hdronly
+strip nosuch
+strip nosuch prog text.txt progn nosuch2 progr

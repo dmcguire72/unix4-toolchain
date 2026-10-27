@@ -136,20 +136,27 @@ ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 
 ## D. AR
 
-A port for AR is currently being planned
-
-For now, use the emulator:
-
 ```bash
-/opt/v4/sys/bin/ar ...
+ar key afile [name ...]
+# if installed: 
+# v4-ar key afile [name ...]
 ```
+
+#### Keys
+
+- r: Replace the named files in the archive, or add them at the end if they are not there. Creates the archive if it does not already exist.
+- u: Update: replace a member only if the file of that name is newer than the member. With no names, every member for which a newer file exists in the current directory is replaced. Names that match no member are added.
+- d: Delete the named members.
+- x: Extract the named members (all of them if none are named) into the current directory.
+- t: Print the table of contents (only the named members, if any).
+- v: Verbose. Print one line per member that is acted on: `a` added, `r` replaced, `c` copied unchanged, `d` deleted, `x` extracted.
 
 ## E. STRIP
 
-A port for STRIP is currently being planned
-
 ```bash
-/opt/v4/sys/bin/strip ...
+strip file ...
+# if installed: 
+# v4-strip file ...
 ```
 
 ## F. Userspace emulator

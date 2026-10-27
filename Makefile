@@ -38,10 +38,12 @@ EMULATOR_SRC = \
 EMULATOR_HDR = tools/emulator/pdp11.h
 
 STRIP_TARGETS = $(BIN)/as $(BIN)/as2 $(BIN)/ld \
-                $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 \
+				$(BIN)/ar $(BIN)/strip \
+                $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cc11 \
                 $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis
 
 all: $(BIN)/as $(BIN)/as2 $(BIN)/ld \
+	 $(BIN)/ar $(BIN)/strip \
      $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 \
      $(BIN)/v4dis emulator
 
@@ -54,6 +56,10 @@ $(BIN) $(BLD):
 $(BIN)/as: src/as1.c src/astab.c src/as.h tables/chartab.inc | $(BIN)
 	$(ECHO) CC $@
 	$(Q)$(CC) $(CFLAGS) -Isrc -o $@ src/as1.c src/astab.c
+
+$(BIN)/ar: $(SRC)/ar.c | $(BIN)
+	$(ECHO) CC $@
+	$(Q)$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
 
 $(BIN)/as2: src/as2.c src/astab.c src/as.h | $(BIN)
 	$(ECHO) CC $@
@@ -80,6 +86,10 @@ $(BIN)/cc1: $(PASS1) $(SRC)/cc1.h $(SRC)/ccw.h | $(BIN)
 	$(Q)$(CC) $(CFLAGS) -I$(SRC) -o $@ $(PASS1) -lm
 
 $(BIN)/cc11: $(SRC)/cc11.c | $(BIN)
+	$(ECHO) CC $@
+	$(Q)$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
+
+$(BIN)/strip: $(SRC)/strip.c | $(BIN)
 	$(ECHO) CC $@
 	$(Q)$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
 
@@ -140,7 +150,15 @@ check-ld: $(BIN)/as $(BIN)/as2 $(BIN)/ld
 	$(ECHO) TEST $@
 	@BIN=$(CURDIR)/$(BIN) sh tests/ld/run.sh check
 
-check: check-as check-cc check-ld
+check-ar: $(BIN)/ar
+	$(ECHO) TEST $@
+	@BIN=$(CURDIR)/$(BIN) sh tests/ar/run.sh check
+
+check-strip: $(BIN)/as $(BIN)/as2 $(BIN)/ld $(BIN)/strip
+	$(ECHO) TEST $@
+	@BIN=$(CURDIR)/$(BIN) sh tests/strip/run.sh check
+
+check: check-as check-cc check-ld check-ar check-strip
 
 dis-check: $(BIN)/v4dis $(BIN)/v4linux
 	$(ECHO) TEST $@
@@ -150,4 +168,4 @@ clean:
 	$(ECHO) CLEAN "$(BIN) $(BLD)"
 	$(Q)rm -rf $(BIN) $(BLD)
 
-.PHONY: all emulator strip check check-as check-cc check-ld dis-check clean
+.PHONY: all emulator strip check check-as check-cc check-ld check-ar check-strip dis-check clean

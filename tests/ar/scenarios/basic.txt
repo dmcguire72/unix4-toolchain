@@ -1,0 +1,14 @@
+ar rv lib.a a.o bb.o ccc.o
+ar t lib.a
+ar tv lib.a
+ar t lib.a bb.o nosuch.o
+ar rv lib.a dddddddd.o odd.o even.o empty.o
+ar t lib.a
+ar rv lib.a sub/deep.txt
+ar t lib.a
+ar x lib.a
+ar xv lib.a bb.o
+ar dv lib.a bb.o a.o nosuch.o
+ar t lib.a
+ar rv lib.a bb.o eeeeeeeeee.o
+ar t lib.a

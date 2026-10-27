@@ -1,0 +1,18 @@
+ar rv q.a dddddddd.o eeeeeeeeee.o a.o
+ar t q.a
+ar rv q.a sub/deep.txt eeeeeeeeee.o
+ar tv q.a
+ar t q.a dddddddd eeeeeeee
+ar t q.a eeeeeeeeXYZ.o
+ar xv q.a eeeeeeee.o
+ar dv q.a eeeeeeeeee.o
+ar t q.a
+ar rv q.a a.o a.o bb.o a.o
+ar t q.a
+ar dv q.a a.o
+ar t q.a
+ar rv q.a bb.o bb.o
+ar t q.a
+ar d q.a
+ar t q.a
+ar x q.a

@@ -1,0 +1,14 @@
+ar rv e.a empty.o
+ar t e.a
+ar x e.a
+ar dv e.a empty.o
+ar t e.a
+ar rv e.a odd.o even.o odd.o
+ar tv e.a
+rm odd.o
+rm even.o
+ar xv e.a
+ar xv e.a odd.o
+chmod 000 g.o
+ar rv e.a g.o
+ar t e.a

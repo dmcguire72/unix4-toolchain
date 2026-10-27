@@ -1,0 +1,11 @@
+cp prog p1
+cp prog p2
+cp prog p3
+cp progr p4
+trunc 200 p1
+trunc 100 p2
+trunc 31 p3
+trunc 250 p4
+strip p1
+strip p2 p3 p4
+strip p1 p2 p3 p4

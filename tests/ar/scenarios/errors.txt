@@ -1,0 +1,22 @@
+ar
+ar r
+ar rr x.a
+ar z x.a
+ar v x.a
+ar vv x.a
+ar t
+ar t nosuch.a
+ar x nosuch.a
+ar d nosuch.a a.o
+ar u nosuch.a a.o
+ar rv new.a a.o
+ar rv new.a nosuch.o
+ar t new.a
+ar rv new.a bb.o nosuch.o ccc.o
+ar t new.a
+ar t x.c
+ar x x.c
+ar rv x.c a.o
+ar vtr new.a
+ar rvv new.a
+ar t new.a

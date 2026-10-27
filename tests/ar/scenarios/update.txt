@@ -1,0 +1,11 @@
+ar rv u.a a.o bb.o ccc.o f.o
+touch 1700001000 bb.o
+touch 1699999000 f.o
+ar uv u.a bb.o f.o a.o g.o
+ar t u.a
+ar uv u.a
+touch 1700009000 ccc.o
+touch 1700009000 a.o
+ar uv u.a
+ar tv u.a
+ar u u.a nosuch.o

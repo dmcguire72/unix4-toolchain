@@ -1,0 +1,7 @@
+ar rv big.a big.o h.o odd.o f.o
+ar tv big.a
+ar x big.a
+ar rv big.a g.o
+ar t big.a
+ar dv big.a h.o
+ar t big.a

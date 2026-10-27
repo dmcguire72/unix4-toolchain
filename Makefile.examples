@@ -1,9 +1,9 @@
 MAKEFLAGS += -r
 .SUFFIXES:
 
-CC11 = ./bin/cc11
-AR = /opt/v4/sys/bin/ar
-STRIP = /opt/v4/sys/bin/strip
+CC = ./bin/cc11
+AR = ./bin/ar
+STRIP = ./bin/strip
 
 CFLAGS =
 BIN = example/bin
@@ -22,7 +22,7 @@ LIB_PROGRAMS = crypttest alloctest hello
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
 TARGETS = $(PROGRAMS:%=$(BIN)/%)
-OBJECTS = $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.o
+OBJECTS = $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.a
 
 .PHONY: all clean strip
 
@@ -45,7 +45,7 @@ $(BIN) $(OBJ):
 define COMPILE_OBJECT
 	$(ECHO) CC $(2)
 	$(Q)rm -f a.out $(basename $(1)).o $(2)
-	$(Q)$(CC11) $(CFLAGS) -c $(1) || true
+	$(Q)$(CC) $(CFLAGS) -c $(1) || true
 	$(Q)test -s $(basename $(1)).o || { \
 		echo "CC failed: no object generated for $(1)"; \
 		exit 1; \
@@ -56,7 +56,7 @@ endef
 define BUILD_BINARY
 	$(ECHO) CC $(2)
 	$(Q)rm -f a.out $(2)
-	$(Q)$(CC11) $(CFLAGS) $(1) || true
+	$(Q)$(CC) $(CFLAGS) $(1) || true
 	$(Q)test -s a.out || { \
 		echo "CC failed: no executable generated for $(2)"; \
 		exit 1; \
@@ -75,7 +75,7 @@ $(OBJ)/pvm.o: extra/pvm/unix4/pvm.c extra/pvm/unix4/pvm-common.h | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)
 	$(Q)rm -f example/pvm-common.h
 
-$(OBJ)/lib.o: $(OBJ)/allocator.o $(OBJ)/io.o
+$(OBJ)/lib.a: $(OBJ)/allocator.o $(OBJ)/io.o
 	$(ECHO) AR $@
 	$(Q)rm -f $@
 	$(Q)$(AR) r $@ $(OBJ)/allocator.o $(OBJ)/io.o
@@ -83,7 +83,7 @@ $(OBJ)/lib.o: $(OBJ)/allocator.o $(OBJ)/io.o
 $(PLAIN_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c | $(BIN)
 	$(call BUILD_BINARY,$<,$@)
 
-$(LIB_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c $(OBJ)/lib.o | $(BIN)
+$(LIB_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c $(OBJ)/lib.a | $(BIN)
 	$(call BUILD_BINARY,$^,$@)
 
 clean:

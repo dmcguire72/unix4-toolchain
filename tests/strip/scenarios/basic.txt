@@ -1,0 +1,5 @@
+strip prog
+strip progn progr
+strip progs progx m.o
+strip f.o g.o hello.o crt0.o
+strip prog
