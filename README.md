@@ -4,7 +4,7 @@ This repository contains a few components:
 
 - A. CC for Linux (targetting Unix v4 with PDP-11 assembly)
 - B. AS for Linux (targetting Unix v4 with the PDP-11 a.out file format)
-- C. LD for Linux (targetting Unix v4 for the PDP-11 a.out file format) [soon]
+- C. LD for Linux (targetting Unix v4 for the PDP-11 a.out file format)
 - D. AR for Linux (targetting Unix v4 for the PDP-11 a.out file format) [soon]
 - E. STRIP for Linux (targetting the Unix v4 symbols in PDP-11 a.out file format) [soon]
 - F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.
