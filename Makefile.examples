@@ -1,11 +1,22 @@
 MAKEFLAGS += -r
 .SUFFIXES:
 
-CC = ./bin/cc11
-AR = ./bin/ar
-STRIP = ./bin/strip
+V4_CC11 ?= $(if $(wildcard ./bin/cc11),./bin/cc11,/usr/bin/v4-cc)
+V4_AR ?= $(if $(wildcard ./bin/ar),./bin/ar,/usr/bin/v4-ar)
+V4_STRIP ?= $(if $(wildcard ./bin/strip),./bin/strip,/usr/bin/v4-strip)
+V4_CC2 := $(or $(wildcard ./bin/cc2),$(wildcard /opt/v4/sys/lib/c2))
 
-CFLAGS =
+CC = $(V4_CC11)
+AR = $(V4_AR)
+STRIP = $(V4_STRIP)
+
+ifneq ($(V4_CC2),)
+  V4_CFLAGS ?= -O
+else
+  V4_CFLAGS ?=
+endif
+CFLAGS = $(V4_CFLAGS)
+
 BIN = example/bin
 OBJ = example/obj
 
@@ -21,8 +32,11 @@ PLAIN_PROGRAMS = char crash float quine cal
 LIB_PROGRAMS = crypttest alloctest hello
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
+LIB_TARGETS = allocator io string
+LIB_OBJECTS = $(LIB_TARGETS:%=$(OBJ)/%.o)
+
 TARGETS = $(PROGRAMS:%=$(BIN)/%)
-OBJECTS = $(OBJ)/allocator.o $(OBJ)/io.o $(OBJ)/lib.a
+OBJECTS = $(LIB_OBJECTS) $(OBJ)/lib.a
 
 .PHONY: all clean strip
 
@@ -64,10 +78,7 @@ define BUILD_BINARY
 	$(Q)mv a.out $(2)
 endef
 
-$(OBJ)/allocator.o: example/lib/allocator.c | $(OBJ)
-	$(call COMPILE_OBJECT,$<,$@)
-
-$(OBJ)/io.o: example/lib/io.c | $(OBJ)
+$(LIB_OBJECTS): $(OBJ)/%.o: example/lib/%.c | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)
 
 $(OBJ)/pvm.o: extra/pvm/unix4/pvm.c extra/pvm/unix4/pvm-common.h | $(OBJ)
@@ -75,10 +86,10 @@ $(OBJ)/pvm.o: extra/pvm/unix4/pvm.c extra/pvm/unix4/pvm-common.h | $(OBJ)
 	$(call COMPILE_OBJECT,$<,$@)
 	$(Q)rm -f example/pvm-common.h
 
-$(OBJ)/lib.a: $(OBJ)/allocator.o $(OBJ)/io.o
+$(OBJ)/lib.a: $(LIB_OBJECTS)
 	$(ECHO) AR $@
 	$(Q)rm -f $@
-	$(Q)$(AR) r $@ $(OBJ)/allocator.o $(OBJ)/io.o
+	$(Q)$(AR) r $@ $^
 
 $(PLAIN_PROGRAMS:%=$(BIN)/%): $(BIN)/%: example/%.c | $(BIN)
 	$(call BUILD_BINARY,$<,$@)
@@ -90,4 +101,4 @@ clean:
 	$(ECHO) CLEAN "$(BIN) $(OBJ)"
 	$(Q)rm -f $(TARGETS) $(OBJECTS) a.out
 	$(Q)rm -f $(PROGRAMS:%=example/%.o)
-	$(Q)rm -f example/lib/allocator.o example/lib/io.o
+	$(Q)rm -f $(LIB_TARGETS:%=example/lib/%.o)
