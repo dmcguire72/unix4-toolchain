@@ -35,7 +35,7 @@ strip: all
 		else \
 			printf "  %-7s %s\n" STRIP "$$f"; \
 		fi; \
-		$(STRIP) "$$f" || true; \
+		$(STRIP) "$$f"; \
 	done
 
 $(BIN) $(OBJ):
@@ -45,7 +45,7 @@ $(BIN) $(OBJ):
 define COMPILE_OBJECT
 	$(ECHO) CC $(2)
 	$(Q)rm -f a.out $(basename $(1)).o $(2)
-	$(Q)$(CC) $(CFLAGS) -c $(1) || true
+	$(Q)$(CC) $(CFLAGS) -c $(1) || [ $$? -eq 1 ]
 	$(Q)test -s $(basename $(1)).o || { \
 		echo "CC failed: no object generated for $(1)"; \
 		exit 1; \
@@ -56,7 +56,7 @@ endef
 define BUILD_BINARY
 	$(ECHO) CC $(2)
 	$(Q)rm -f a.out $(2)
-	$(Q)$(CC) $(CFLAGS) $(1) || true
+	$(Q)$(CC) $(CFLAGS) $(1) || [ $$? -eq 1 ]
 	$(Q)test -s a.out || { \
 		echo "CC failed: no executable generated for $(2)"; \
 		exit 1; \

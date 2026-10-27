@@ -4,11 +4,16 @@ CFLAGS = -std=gnu11 -O3 -Wall -Wno-unused-result
 DEPFLAGS = -MMD -MP
 
 USR = usr
+BIN = bin
+TMP = tmp
+
 C_SRC = $(USR)/c
 S1_SRC = $(USR)/source/s1
-BLD = tmp/build
-BIN = bin
-OBJ = tmp/obj
+
+BLD = $(TMP)/build
+OBJ = $(TMP)/obj
+
+TO_CLEANUP = $(TMP) $(BIN)
 
 ifeq ($(V),1)
   Q :=
@@ -204,8 +209,8 @@ uninstall:
 	$(Q)./tools/v4linux-uninstall.sh $(if $(filter 1,$(V)),-v,) --purge-all
 
 clean:
-	$(ECHO) CLEAN "$(BIN) $(BLD)"
-	$(Q)rm -rf $(BIN) $(BLD)
+	$(ECHO) CLEAN "$(TO_CLEANUP)"
+	$(Q)rm -rf $(TO_CLEANUP)
 
 .PHONY: all emulator strip $(STRIP_TASKS) check check-as check-cc check-ld check-ar check-strip dis-check install uninstall clean
 
