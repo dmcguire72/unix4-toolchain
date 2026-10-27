@@ -5,8 +5,8 @@ This repository contains a few components:
 - A. CC for Linux (targetting Unix v4 with PDP-11 assembly)
 - B. AS for Linux (targetting Unix v4 with the PDP-11 a.out file format)
 - C. LD for Linux (targetting Unix v4 for the PDP-11 a.out file format)
-- D. AR for Linux (targetting Unix v4 for the PDP-11 a.out file format) [soon]
-- E. STRIP for Linux (targetting the Unix v4 symbols in PDP-11 a.out file format) [soon]
+- D. AR for Linux (targetting Unix v4 for the PDP-11 a.out file format)
+- E. STRIP for Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)
 - F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.
 - G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
 
@@ -179,24 +179,33 @@ To get started:
 mkdir -p v4
 curl -fL https://danielm.pages.dev/useful/unix_v4.tar.xz -o /tmp/unix_v4.tar.xz
 tar -xJf /tmp/unix_v4.tar.xz -C ./v4
-make emulator
-sudo ./tools/emulator/linux/pdp11-setup.sh ./v4 ./bin
+make -j$(nproc)
+sudo make install
 ```
 
 If all goes well:
 
 ```bash
-$ sudo ./tools/emulator/linux/pdp11-setup.sh ./v4 ./bin
+$ # 
+$ sudo make install
+  INSTALL bin
+No Unix v4 root specified. Would you like to download it?
+  0 - No, exit
+  1 - Stock
+  2 - With symbols
+Selection [0-2]: 1
+'./.v4/stock' already exists. Redownload? [y/N]: n
 Installing persistence...
-Created symlink '/etc/systemd/system/multi-user.target.wants/pdp11.service' → '/etc/systemd/system/pdp11.service'.
+Created symlink '/etc/systemd/system/multi-user.target.wants/v4linux.service' → '/etc/systemd/system/v4linux.service'.
 Persistence installed via systemd.
 setup complete.
   V4 lower root: /opt/v4/sys
   Emulator:      /opt/v4/bin/v4linux
-  Guest root:    /var/run/pdp11-v4 (/)
-  Host view:     /var/run/pdp11-v4/host (/host)
-  Home view:     /var/run/pdp11-v4/home (/home)
-  Dispatcher:    /usr/local/libexec/unix4-dispatch
+  Guest root:    /var/run/v4 (/)
+  Guest /tmp:    tmpfs at /var/run/v4/tmp
+  Host view:     /var/run/v4/host (/host)
+  Home view:     /var/run/v4/home (/home)
+  Dispatcher:    /usr/local/libexec/v4linux-dispatch
   Magic 0407:    registered (07 01)
   Magic 0410:    registered (08 01)
 ```
@@ -225,17 +234,30 @@ usr
 hello world
 ```
 
+To remove it:
+
+```bash
+sudo v4-uninstall [--purge-v4] [--purge-bin] [--purge-all]
+```
+
+- --purge-v4      Also delete /opt/v4/sys
+- --purge-bin     Also delete /opt/v4/bin
+- --purge-all     Delete both /opt/v4/sys and /opt/v4/bin
+
 This also installs the native toolchain:
 
 ```bash
 $ ls -l /usr/bin/v4*
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ar -> /opt/v4/bin/ar
 lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as -> /opt/v4/bin/as
 lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as2 -> /opt/v4/bin/as2
 lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc -> /opt/v4/bin/cc11
 lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc0 -> /opt/v4/bin/cc0
 lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc1 -> /opt/v4/bin/cc1
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-dis -> /opt/v4/bin/v4dis
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-disasm -> /opt/v4/bin/v4dis
 lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ld -> /opt/v4/bin/ld
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-strip -> /opt/v4/bin/strip
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-uninstall -> /opt/v4/bin/uninstall
 ```
 
 ## G. Disassembler
