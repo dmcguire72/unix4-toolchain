@@ -8,7 +8,7 @@ C_SRC = $(USR)/c
 S1_SRC = $(USR)/source/s1
 BLD = tmp/build
 BIN = bin
-OBJ = $(BLD)/obj
+OBJ = tmp/obj
 
 ifeq ($(V),1)
   Q :=
