@@ -43,9 +43,9 @@ STRIP_TARGETS = $(BIN)/as $(BIN)/as2 $(BIN)/ld \
 
 all: $(BIN)/as $(BIN)/as2 $(BIN)/ld \
      $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 \
-     emulator
+     $(BIN)/v4dis emulator
 
-emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis
+emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch
 
 $(BIN) $(BLD):
 	$(ECHO) MKDIR $@
