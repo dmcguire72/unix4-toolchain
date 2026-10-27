@@ -1,14 +1,14 @@
 CC ?= cc
 STRIP = strip
-CFLAGS = -std=gnu11 -O3 -Wall -Wno-unused-result
+CFLAGS ?= -std=gnu11 -O3 -Wall -Wno-unused-result
 DEPFLAGS = -MMD -MP
 
-USR = usr
-BIN = bin
-TMP = tmp
+USR ?= usr
+BIN ?= bin
+TMP ?= tmp
 
-C_SRC = $(USR)/c
-S1_SRC = $(USR)/source/s1
+C_SRC ?= $(USR)/c
+S1_SRC ?= $(USR)/source/s1
 
 BLD = $(TMP)/build
 OBJ = $(TMP)/obj
