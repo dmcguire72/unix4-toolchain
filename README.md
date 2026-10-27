@@ -23,6 +23,8 @@ The CC Compiler is built of many pieces, as the original had memory constraints:
 
 ```bash
 cc [-c] [-S] [-O] [-P] [-p] [-2 | -20] [-t] [options/files...]
+# if installed: 
+# v4-cc [-c] [-S] [-O] [-P] [-p] [-2 | -20] [-t] [options/files...]
 ```
 
 #### CC Options
@@ -85,6 +87,8 @@ The AS Assembler is also split like the original:
 
 ```bash
 as [-] file ...
+# if installed: 
+# v4-as [-] file ...
 ```
 
 #### AS Options
@@ -114,6 +118,8 @@ as2 <tmp1> <tmp2> <tmp3> <tmp4> [-g]
 
 ```bash
 ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
+# if installed: 
+# v4-ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 ```
 
 #### LD Options
@@ -231,6 +237,8 @@ lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ld -> /opt/v4/bin/ld
 
 ```bash
 dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
+# if installed: 
+# v4-dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
 ```
 
 #### Disassembler Options
