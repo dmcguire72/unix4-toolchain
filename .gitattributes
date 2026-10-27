@@ -3,7 +3,6 @@ orig/**/* linguist-detectable=false
 tests/**/expected/**/* linguist-detectable=false
 tests/**/scenarios/**/* linguist-detectable=false
 tests/**/src/**/* linguist-detectable=false
-tests/**/expected/**/* linguist-detectable=false
 example/**/*.b linguist-language=Basic
 **/*.c.inl linguist-language=C
 **/Makefile.* linguist-language=Makefile
