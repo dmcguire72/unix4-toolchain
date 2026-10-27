@@ -1,0 +1,60 @@
+.TH V4-CC 1 "March 15, 1972" "UNIX Fourth Edition" "User Commands"
+.SH NAME
+v4-cc \- C compiler
+.SH SYNOPSIS
+.B cc
+.RB [ \-c ]
+.RB [ \-p ]
+.I file ...
+.SH DESCRIPTION
+.I cc
+is the UNIX C compiler.
+It accepts three types of arguments:
+.PP
+Arguments whose names end in \fB.c\fR are assumed to be C source programs.
+They are compiled, and the object program is written to a file whose name is
+that of the source with \fB.o\fR substituted for \fB.c\fR.
+.PP
+Other arguments, except for \fB\-c\fR, are assumed to be either loader flag
+arguments, C-compatible object programs typically produced by an earlier
+.I cc
+run, or libraries of C-compatible routines.
+These programs, together with the results of any compilations specified, are
+loaded in the order given to produce an executable program named \fBa.out\fR.
+.PP
+The \fB\-c\fR argument suppresses the loading phase, as does any syntax error
+in any of the routines being compiled.
+.PP
+If the \fB\-p\fR flag is used, only the macro prepass is run on all files whose
+names end in \fB.c\fR.
+The expanded source is written to a file whose name is that of the source with
+\fB.i\fR substituted for \fB.c\fR.
+.SH FILES
+.TP
+.B file.c
+input file
+.TP
+.B file.o
+object file
+.TP
+.B a.out
+loaded output
+.TP
+.B /tmp/ctm?
+temporary file
+.TP
+.B /lib/c[01]
+compiler
+.TP
+.B /lib/crt0.o
+runtime startoff
+.TP
+.B /lib/libc.a
+built-in functions and related routines
+.TP
+.B /lib/liba.a
+system library
+.SH SEE ALSO
+.I "C Reference Manual",
+\fBcdb\fR(1), \fBld\fR(1)
+.SH BUGS

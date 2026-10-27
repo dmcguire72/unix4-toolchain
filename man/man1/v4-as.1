@@ -1,0 +1,90 @@
+.TH V4-AS 1 "January 15, 1973" "UNIX Fourth Edition" "User Commands"
+.SH NAME
+v4-as \- assembler
+.SH SYNOPSIS
+.B as
+.RB [ \- ]
+.I name ...
+.SH DESCRIPTION
+.I as
+assembles the concatenation of the named files.
+If the optional first argument \fB\-\fR is used, all undefined symbols in the
+assembly are treated as global.
+.PP
+The output of the assembly is written to the file \fBa.out\fR.
+It is executable if no errors occurred during the assembly and if there were
+no unresolved external references.
+.SH FILES
+.TP
+.B /etc/as2
+pass 2 of the assembler
+.TP
+.B /tmp/atm[1-4]?
+temporary files
+.TP
+.B a.out
+object file
+.SH SEE ALSO
+\fBld\fR(1), \fBnm\fR(1), \fBdb\fR(1), \fBa.out\fR(5),
+.I "UNIX Assembler Manual"
+.SH DIAGNOSTICS
+When an input file cannot be read, its name followed by a question mark is
+printed and assembly ceases.
+When syntactic or semantic errors occur, a single-character diagnostic is
+printed together with the line number and the file name in which it occurred.
+Errors in pass 1 cancel pass 2.
+The possible errors are:
+.TP
+.B ")"
+Parentheses error
+.TP
+.B "]"
+Parentheses error
+.TP
+.B "<"
+String not terminated properly
+.TP
+.B "*"
+Indirection used illegally
+.TP
+.B "."
+Illegal assignment to \fB.\fR
+.TP
+.B A
+Error in address
+.TP
+.B B
+Branch instruction is odd or too remote
+.TP
+.B E
+Error in expression
+.TP
+.B F
+Error in local (\fBf\fR or \fBb\fR) type symbol
+.TP
+.B G
+Garbage (unknown) character
+.TP
+.B I
+End of file inside an \fBif\fR
+.TP
+.B M
+Multiply defined symbol as label
+.TP
+.B O
+Word quantity assembled at odd address
+.TP
+.B P
+\fB.\fR different in pass 1 and 2
+.TP
+.B R
+Relocation error
+.TP
+.B U
+Undefined symbol
+.TP
+.B X
+Syntax error
+.SH BUGS
+Symbol table overflow is not checked.
+Errors of type \fBX\fR can cause incorrect line numbers in following diagnostics.

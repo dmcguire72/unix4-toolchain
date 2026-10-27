@@ -1,0 +1,85 @@
+.TH V4-AR 1 "March 15, 1972" "UNIX Fourth Edition" "User Commands"
+.SH NAME
+v4-ar \- archive and library maintainer
+.SH SYNOPSIS
+.B ar
+.I key afile name ...
+.SH DESCRIPTION
+.I ar
+maintains groups of files combined into a single archive file.
+Its main use is to create and update library files as used by the loader.
+It can also be used for similar purposes.
+.PP
+.I key
+is one character from the set \fBdrtux\fR, optionally concatenated with
+\fBv\fR.
+.I afile
+is the archive file.
+The
+.I names
+are constituent files in the archive file.
+The meanings of the
+.I key
+characters are:
+.TP
+.B d
+Delete the named files from the archive file.
+.TP
+.B r
+Replace the named files in the archive file.
+If the archive file does not exist, create it.
+If the named files are not in the archive file, append them.
+.TP
+.B t
+Print a table of contents of the archive file.
+If no names are given, list all files in the archive.
+If names are given, list only those files.
+.TP
+.B u
+Similar to \fBr\fR, except that only files that have been modified are replaced.
+If no names are given, replace all files in the archive that have been modified.
+.TP
+.B x
+Extract the named files.
+If no names are given, extract all files in the archive.
+In neither case does \fBx\fR alter the archive file.
+.TP
+.B v
+Verbose mode.
+.I ar
+gives a file-by-file description of how a new archive file is made from the
+old archive and the constituent files.
+The following abbreviations are used:
+.RS
+.TP
+.B c
+copy
+.TP
+.B a
+append
+.TP
+.B d
+delete
+.TP
+.B r
+replace
+.TP
+.B x
+extract
+.RE
+.SH FILES
+.TP
+.B /tmp/vtm?
+temporary file
+.SH SEE ALSO
+\fBld\fR(1), \fBarchive\fR(5)
+.SH BUGS
+The \fBtv\fR option should be implemented as a table with more information.
+.PP
+There should be a way to specify the placement of a new file in an archive.
+Currently, it is placed at the end.
+.PP
+Since
+.I ar
+has not been rewritten to deal properly with the new file-system modes,
+extracted files have mode 666.

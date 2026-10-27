@@ -1,0 +1,62 @@
+.TH V4-DISASM 1 "October 27, 2026" "UNIX Fourth Edition" "User Commands"
+.SH NAME
+v4-disasm \- PDP-11 disassembler
+.SH SYNOPSIS
+.B v4-disasm
+.RB [ \-a ] [ \-k ] [ \-n ] [ \-s ] [ \-v ] [ \-L\ \fIlabels\fR ]
+.I file
+.SH DESCRIPTION
+.I v4-disasm
+disassembles PDP-11 binaries in the PDP-11 \fBa.out\fR format. It attempts to 
+distinguish between code and data by performing a recursive walk of the 
+executable segments, starting from the entry point and following 
+branch and jump instructions.
+.PP
+The program supports binaries with magic numbers \fB0407\fR and \fB0410\fR.
+.PP
+The following options may be used:
+.TP
+.B \-a
+Print the octal address and the raw instruction bytes for every line of 
+output.
+.TP
+.B \-k
+Keep "implausible" instructions. By default, the recursive walk may 
+reject certain instruction sequences that are unlikely to occur in 
+standard code; \fB\-k\fR forces their inclusion.
+.TP
+.B \-n
+Do not print padding information between the text and data segments.
+.TP
+.B \-s
+Attempt to infer and print C-style function signatures. This is done by 
+analyzing stack pointer offsets and register usage (e.g., \fBr0\fR) 
+within the function body.
+.TP
+.B \-v
+Verbose mode. Prints statistics regarding label generation and the 
+total number of bytes analyzed as code and data to the standard error 
+stream.
+.TP
+.B \-L \fIlabels\fR
+Set the budget for automatically generated labels. The disassembler 
+will limit the number of synthetic labels (e.g., \fBL000100\fR) to this 
+value to prevent output bloat.
+.SH FILES
+.TP
+.B a.out
+The input binary file. Must be a valid PDP-11 UNIX V4 object file.
+.SH SEE ALSO
+\fBv4-as\fR(1)
+.SH DIAGNOSTICS
+If the input file is too short to contain a header, the message 
+\fI"too short"\fR is printed.
+.PP
+If the file does not match the expected PDP-11 UNIX V4 magic numbers, 
+the message \fI"not a 0407/0410 a.out"\fR is printed.
+.PP
+If the image exceeds the addressable memory limit of the disassembler 
+(64KB), the message \fI"image too large"\fR is printed.
+.SH BUGS
+speculative walking might misidentify data as code (or vice-versa) in binaries with 
+highly unconventional control flows or dense jump tables (or by using \fBv4-cc\fR(1) peephole optimizer pass).

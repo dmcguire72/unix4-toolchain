@@ -1,0 +1,71 @@
+.TH V4LINUX 1 "October 27, 2026" "unix4-toolchain" "User Commands"
+.SH NAME
+v4linux \- PDP-11 (11/45+EIS) Emulator and UNIX V4 translation layer
+.SH SYNOPSIS
+.B v4linux
+.RB [ \-r\ \fIroot\fR ] [ \-\-chdir\ \fIdir\fR ] [ \-\-host ] [ \-x ] [ \-s ] [ \-t ] [ \-F ] [ \-f ] [ \-b ] [ \-T ] [ \-o\ \fIfile\fR ]
+.I prog args ...
+.SH DESCRIPTION
+.I v4linux
+is an execution environment for UNIX Fourth Edition PDP-11 programs. It allows the user to run guest binaries as if they are a native Linux binary.
+.PP
+The following command line options may be used:
+.TP
+.B \-r \fIroot\fR
+Specify the root directory for the guest environment.
+.TP
+.B \-\-chdir \fIdir\fR
+Change the working directory within the guest environment to \fIdir\fR.
+.TP
+.B \-\-host
+Enable host integrations, allowing the guest to interact with the host system.
+.TP
+.B \-x
+Stop execution immediately upon the first \fBexec\fR call.
+.TP
+.B \-t
+Trace every CPU instruction executed by the guest.
+.TP
+.B \-s
+Trace guest system calls (similar to the behavior of \fBstrace\fR).
+.TP
+.B \-F
+Trace floating-point (FPU) instructions.
+.TP
+.B \-f, \-\-trace-func
+Trace function calls and their corresponding arguments.
+.TP
+.B \-b, \-\-backtrace
+Print a stack backtrace automatically if the guest program crashes.
+.TP
+.B \-T
+Enable all tracing options (\fB\-t\fR, \fB\-s\fR, \fB\-F\fR, \fB\-f\fR) and enable backtracing on crash.
+.TP
+.B \-o \fIfile\fR
+Write the resulting trace output to \fIfile\fR instead of standard output.
+.SH ENVIRONMENT
+The behavior of \fBv4linux\fR can also be configured using environment variables.
+.TP
+.B V4LINUX_TRACE_CPU=1
+Equivalent to \fB\-t\fR.
+.TP
+.B V4LINUX_TRACE_SYS=1
+Equivalent to \fB\-s\fR.
+.TP
+.B V4LINUX_TRACE_FPU=1
+Equivalent to \fB\-F\fR.
+.TP
+.B V4LINUX_TRACE_FUNC=1
+Equivalent to \fB\-f\fR.
+.TP
+.B V4LINUX_TRACE_STACK=1
+Equivalent to \fB\-b\fR.
+.TP
+.B V4LINUX_TRACE_ALL=1
+Equivalent to \fB\-T\fR.
+.TP
+.B V4LINUX_STOP_AT_EXEC=1
+Equivalent to \fB\-x\fR.
+.TP
+.B V4LINUX_TRACE_FILE=path
+Equivalent to \fB\-o path\fR.

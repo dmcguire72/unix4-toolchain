@@ -1,0 +1,91 @@
+.TH V4-LD 1 "August 16, 1973" "UNIX Fourth Edition" "User Commands"
+.SH NAME
+v4-ld \- link editor
+.SH SYNOPSIS
+.B ld
+.RB [ \-sulxrnd ]
+.I name ...
+.SH DESCRIPTION
+.I ld
+combines several object programs into one, resolves external references, and
+searches libraries.
+In the simplest case, the names of several object programs are given, and
+.I ld
+combines them, producing an object module that can either be executed or become
+the input for a further
+.I ld
+run.
+In the latter case, the \fB\-r\fR option must be given to preserve the
+relocation bits.
+The output of
+.I ld
+is written to \fBa.out\fR.
+This file is executable only if no errors occurred during the load.
+.PP
+The argument routines are concatenated in the order specified.
+The entry point of the output is the beginning of the first routine.
+.PP
+If any argument is a library, it is searched exactly once at the point where
+it appears in the argument list.
+Only routines defining an unresolved external reference are loaded.
+If a routine from a library references another routine in the library, the
+referenced routine must appear after the referencing routine in the library.
+Thus, the order of programs within libraries is important.
+.PP
+.I ld
+understands several flag arguments written with a preceding \fB\-\fR.
+Except for \fB\-l\fR, they should appear before the file names.
+.TP
+.B \-s
+"Squash" the output by removing the symbol table and relocation bits to save
+space, at the cost of impairing the usefulness of the debugger.
+This information can also be removed with
+.I strip.
+.TP
+.B \-u
+Take the following argument as a symbol and enter it as undefined in the symbol
+table.
+This is useful for loading wholly from a library, since initially the symbol
+table is empty and an unresolved reference is needed to force the loading of
+the first routine.
+.TP
+.B \-l
+Abbreviate a library name.
+\fB\-l\fR alone stands for \fB/lib/liba.a\fR, the standard system library for
+assembly-language programs.
+\fB\-lx\fR stands for \fB/lib/libx.a\fR, where \fIx\fR is any character.
+There are libraries for Fortran (\fIx\fR = \fBf\fR) and C (\fIx\fR = \fBc\fR).
+A library is searched when its name is encountered, so the placement of a
+\fB\-l\fR option is significant.
+.TP
+.B \-x
+Do not preserve local (non-\fB.globl\fR) symbols in the output symbol table;
+enter only external symbols.
+This option saves some space in the output file.
+.TP
+.B \-r
+Generate relocation bits in the output file so that it can be the subject of
+another
+.I ld
+run.
+This flag also prevents final definitions from being given to common symbols.
+.TP
+.B \-d
+Force definition of common storage even if the \fB\-r\fR flag is present.
+This is used for \fBreloc\fR(8).
+.TP
+.B \-n
+Arrange that, when the output file is executed, the text portion will be
+read-only and shared among all users executing the file.
+This moves the data areas up to the first possible 4K-word boundary following
+the end of the text.
+.SH FILES
+.TP
+.B /lib/lib?.a
+libraries
+.TP
+.B a.out
+output file
+.SH SEE ALSO
+\fBas\fR(1), \fBar\fR(1)
+.SH BUGS

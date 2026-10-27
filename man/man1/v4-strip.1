@@ -1,0 +1,23 @@
+.TH V4-STRIP 1 "March 15, 1972" "UNIX Fourth Edition" "User Commands"
+.SH NAME
+v4-strip \- remove symbols and relocation bits
+.SH SYNOPSIS
+.B strip
+.I name ...
+.SH DESCRIPTION
+.I strip
+removes the symbol table and relocation bits ordinarily attached to the output
+of the assembler and loader.
+This is useful for saving space after a program has been debugged.
+.PP
+The effect of
+.I strip
+is the same as using the \fB\-s\fR option of
+.I ld.
+.SH FILES
+.TP
+.B /tmp/stm?
+temporary file
+.SH SEE ALSO
+\fBld\fR(1), \fBas\fR(1)
+.SH BUGS
