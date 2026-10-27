@@ -73,7 +73,7 @@ static int nblocks = 126;
 static char symbol[8];
 
 static const signed char chartab[128] = {
-#include "../tables/chartab.inc"
+#include "../../../tables/chartab.inc"
 };
 
 static const char *tmpdir_cached;

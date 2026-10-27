@@ -3,9 +3,9 @@ STRIP = strip
 CFLAGS = -std=gnu11 -O3 -Wall -Wno-unused-result
 DEPFLAGS = -MMD -MP
 
-SRC = src
-C_SRC = $(SRC)/c
-S1_SRC = $(SRC)/s1
+USR = usr
+C_SRC = $(USR)/c
+S1_SRC = $(USR)/source/s1
 BLD = build
 BIN = bin
 OBJ = $(BLD)/obj
@@ -74,7 +74,7 @@ $(OBJ)/s1/%.o: $(S1_SRC)/%.c | $(OBJ)/s1
 
 $(OBJ)/c/%.o: $(C_SRC)/%.c | $(OBJ)/c
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -I$(SRC) -I$(C_SRC) -c -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -I$(C_SRC) -c -o $@ $<
 
 $(OBJ)/bld/%.o: $(BLD)/%.c | $(OBJ)/bld
 	$(ECHO) CC $@
