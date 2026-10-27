@@ -6,7 +6,7 @@ DEPFLAGS = -MMD -MP
 USR = usr
 C_SRC = $(USR)/c
 S1_SRC = $(USR)/source/s1
-BLD = build
+BLD = tmp/build
 BIN = bin
 OBJ = $(BLD)/obj
 

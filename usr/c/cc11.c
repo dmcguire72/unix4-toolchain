@@ -452,6 +452,8 @@ findlayout(const char *argv0)
 	snprintf(pass0, sizeof pass0, "%s/cc0", bindir);
 	snprintf(pass1, sizeof pass1, "%s/cc1", bindir);
 	snprintf(pass2c, sizeof pass2c, "%s/c2", bindir);
+	if (access(pass2c, X_OK) != 0)
+		snprintf(pass2c, sizeof pass2c, "%s", "/opt/v4/sys/lib/c2");
 	snprintf(asprog, sizeof asprog, "%s/as", bindir);
 	snprintf(ldprog, sizeof ldprog, "%s/ld", bindir);
 	resolve_lib_path(pref, "crt0.o");
