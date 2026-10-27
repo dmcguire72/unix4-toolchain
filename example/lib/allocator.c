@@ -5,7 +5,8 @@
  * 
  * not safe to use with other manual allocators!
  * 
- * requires unmodified CC from unix v4 to compile:
+ * requires unmodified CC from unix v4 to compile (or 
+ * the bundled toolchains compiler):
  * cc allocator.c YOURFILE.c
  */
 #define NULL    0
