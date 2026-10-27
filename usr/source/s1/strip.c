@@ -21,7 +21,7 @@
 #define STEXIT_OK	0
 #define STEXIT_ERR	1
 
-#define BLK		512
+#define BLK		    512
 #define HDRSZ		16
 #define OMAGIC		0407
 #define NMAGIC		0410

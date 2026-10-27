@@ -17,7 +17,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#define NAV	50
+#define NAV	    50
 #define SYMSIZ	200
 
 static char *tmpdir_, *tmp1, *tmp2, *tmp3, *tmp4, *tmp5;

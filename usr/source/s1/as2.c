@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 
 #define BRLEN	1024
-#define EOT	004
+#define EOT     004
 
 #define OP_BR	0400
 #define OP_JMP	0100

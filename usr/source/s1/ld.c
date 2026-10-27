@@ -33,7 +33,7 @@
 
 #define SYMSZ		12
 #define HDRSZ		16
-#define BLK		512
+#define BLK         512
 
 #define RLISTMAX	128
 #define LOCALMAX	256

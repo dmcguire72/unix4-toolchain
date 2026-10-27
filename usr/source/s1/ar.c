@@ -22,7 +22,7 @@
 #define AREXIT_ERR	1
 
 #define DIRSZ		16
-#define BLK		512
+#define BLK		    512
 
 #define D_NAME		0
 #define D_MTIM		8

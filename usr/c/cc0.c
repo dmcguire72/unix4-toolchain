@@ -12,16 +12,16 @@
 
 #define HB	8
 static word ht[HB + HSHSIZ * 8];
-#define HCLASS(p)	ht[(p) + 0]
-#define HTYPE(p)	ht[(p) + 1]
-#define HDIMP(p)	ht[(p) + 2]
-#define HOFFSET(p)	ht[(p) + 3]
-#define HNAME(p)	((char *)&ht[(p) + 4])
-#define HSSP(p)		((int)((uint16_t)ht[(p) + 2] & 0377))
-#define HLENP(p)	((int)(((uint16_t)ht[(p) + 2] >> 8) & 0377))
-#define SETSSP(a, v)	(a) = (word)(((uint16_t)(a) & ~0377) | ((v) & 0377))
-#define SETLENP(a, v)	(a) = (word)(((uint16_t)(a) & 0377) | (((v) & 0377) << 8))
-#define HENT(i)		(HB + 8 * (i))
+#define HCLASS(p)	  ht[(p) + 0]
+#define HTYPE(p)	  ht[(p) + 1]
+#define HDIMP(p)	  ht[(p) + 2]
+#define HOFFSET(p)	  ht[(p) + 3]
+#define HNAME(p)	  ((char *)&ht[(p) + 4])
+#define HSSP(p)		  ((int)((uint16_t)ht[(p) + 2] & 0377))
+#define HLENP(p)	  ((int)(((uint16_t)ht[(p) + 2] >> 8) & 0377))
+#define SETSSP(a, v)  (a) = (word)(((uint16_t)(a) & ~0377) | ((v) & 0377))
+#define SETLENP(a, v) (a) = (word)(((uint16_t)(a) & 0377) | (((v) & 0377) << 8))
+#define HENT(i)		  (HB + 8 * (i))
 
 static int isn = 1, peeksym = -1, peekc, eof, dimp;
 static int space, osleft, treebase = TB;
