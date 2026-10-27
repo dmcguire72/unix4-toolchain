@@ -31,6 +31,11 @@ fi
 
 PARENT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+MAN_SOURCE=""
+MAN_DEST=/opt/v4/man
+MAN_LINK_ROOT=/usr/local/share/man
+MAN_INSTALLATION="$MAN_DEST/installation"
+
 V4_DEST=/opt/v4/sys
 PDP11_DEST=/opt/v4/bin
 DISPATCH_DEST=/usr/local/libexec/v4linux-dispatch
@@ -103,6 +108,123 @@ resolve_root_dir() {
     echo "$dir"
 }
 
+valid_man_link_relative() {
+    local rel=$1
+    local section filename
+
+    [[ "$rel" == */* ]] || return 1
+    section=${rel%%/*}
+    filename=${rel#*/}
+
+    [[ "$section" == man* ]] || return 1
+    [[ -n "$filename" && "$filename" != */* ]] || return 1
+    [[ "$filename" != "." && "$filename" != ".." ]] || return 1
+}
+
+install_man_pages() {
+    local section_dir page section base rel dest_dir dest_file link_dir link_file
+    local old_rel old_section old_link_dir old_link_file expected_target actual_target
+    local resolved_root resolved_dir
+    local -a sources=() relatives=()
+    local -A seen=()
+
+    for section_dir in "$MAN_SOURCE"/man*; do
+        [[ -d "$section_dir" ]] || continue
+        [[ ! -L "$section_dir" ]] || die "refusing symlinked man source directory: $section_dir"
+        section=${section_dir##*/}
+
+        for page in "$section_dir"/*; do
+            [[ -f "$page" ]] || continue
+            base=${page##*/}
+            if [[ "$base" == *.gz ]]; then
+                rel="$section/$base"
+            else
+                rel="$section/$base.gz"
+            fi
+            valid_man_link_relative "$rel" || die "invalid man page path: $rel"
+            [[ -z "${seen[$rel]+present}" ]] || die "multiple source man pages map to $rel"
+            seen["$rel"]=1
+            sources+=("$page")
+            relatives+=("$rel")
+        done
+    done
+
+    ((${#sources[@]} > 0)) || die "no man pages found under $MAN_SOURCE/man*/*"
+
+    [[ ! -L "$MAN_DEST" ]] || die "refusing symlinked man destination: $MAN_DEST"
+    [[ ! -L "$MAN_LINK_ROOT" ]] || die "refusing symlinked system man directory: $MAN_LINK_ROOT"
+    install -d -m 0755 "$MAN_DEST" "$MAN_LINK_ROOT"
+
+    resolved_root=$(realpath -e -- "$MAN_LINK_ROOT") || die "cannot resolve $MAN_LINK_ROOT"
+    [[ "$resolved_root" == "$MAN_LINK_ROOT" ]] || die "refusing non-canonical man directory: $MAN_LINK_ROOT"
+    resolved_root=$(realpath -e -- "$MAN_DEST") || die "cannot resolve $MAN_DEST"
+    [[ "$resolved_root" == "$MAN_DEST" ]] || die "refusing non-canonical man destination: $MAN_DEST"
+
+    [[ ! -L "$MAN_INSTALLATION" ]] || die "refusing symlinked installation manifest: $MAN_INSTALLATION"
+    if [[ -e "$MAN_INSTALLATION" && ! -f "$MAN_INSTALLATION" ]]; then
+        die "man installation manifest is not a regular file: $MAN_INSTALLATION"
+    fi
+
+    if [[ -f "$MAN_INSTALLATION" ]]; then
+        old_rel=""
+        while IFS= read -r -d '' old_rel || [[ -n "$old_rel" ]]; do
+            valid_man_link_relative "$old_rel" || die "invalid path in $MAN_INSTALLATION"
+            old_section=${old_rel%%/*}
+            old_link_dir="$MAN_LINK_ROOT/$old_section"
+            [[ ! -L "$old_link_dir" ]] || die "refusing symlinked man section directory: $old_link_dir"
+            old_link_file="$MAN_LINK_ROOT/$old_rel"
+            if [[ -L "$old_link_file" ]]; then
+                actual_target=$(readlink -- "$old_link_file") || die "cannot read symlink: $old_link_file"
+                expected_target="$MAN_DEST/$old_rel"
+                if [[ "$actual_target" == "$expected_target" ]]; then
+                    rm -f -- "$old_link_file"
+                fi
+            fi
+        done < "$MAN_INSTALLATION"
+    fi
+
+    : > "$MAN_INSTALLATION"
+    chmod 0644 "$MAN_INSTALLATION"
+
+    for index in "${!sources[@]}"; do
+        page=${sources[$index]}
+        rel=${relatives[$index]}
+        section=${rel%%/*}
+        dest_dir="$MAN_DEST/$section"
+        dest_file="$MAN_DEST/$rel"
+        link_dir="$MAN_LINK_ROOT/$section"
+        link_file="$MAN_LINK_ROOT/$rel"
+
+        [[ ! -L "$dest_dir" ]] || die "refusing symlinked man destination section: $dest_dir"
+        [[ ! -L "$link_dir" ]] || die "refusing symlinked man section directory: $link_dir"
+        install -d -m 0755 "$dest_dir" "$link_dir"
+        resolved_dir=$(realpath -e -- "$link_dir") || die "cannot resolve $link_dir"
+        [[ "$resolved_dir" == "$link_dir" ]] || die "refusing non-canonical man section directory: $link_dir"
+
+        if [[ "${page##*/}" == *.gz ]]; then
+            install -m 0644 -- "$page" "$dest_file"
+        else
+            gzip -c -- "$page" > "$dest_file"
+            chmod 0644 -- "$dest_file"
+        fi
+
+        if [[ -L "$link_file" ]]; then
+            actual_target=$(readlink -- "$link_file") || die "cannot read symlink: $link_file"
+            [[ "$actual_target" == "$dest_file" ]] || die "man page link already exists with a different target: $link_file"
+        elif [[ -e "$link_file" ]]; then
+            die "refusing to replace existing non-symlink man page: $link_file"
+        else
+            printf '%s\0' "$rel" >> "$MAN_INSTALLATION"
+            ln -s -- "$dest_file" "$link_file"
+            continue
+        fi
+
+        printf '%s\0' "$rel" >> "$MAN_INSTALLATION"
+    done
+
+    echo "Installed ${#sources[@]} compressed man page(s) under $MAN_DEST."
+}
+
 [[ $EUID -eq 0 ]] || die "run this script as root (for example, with sudo)."
 [[ $# -ge 1 && $# -le 2 ]] || {
     usage >&2
@@ -111,6 +233,9 @@ resolve_root_dir() {
 
 BIN_SOURCE=$(realpath -e -- "$1") || die "cannot resolve bin source: $1"
 [[ -d "$BIN_SOURCE" ]] || die "bin source is not a directory: $BIN_SOURCE"
+
+# Man pages live in ../man relative to the supplied bin directory.
+MAN_SOURCE="$(dirname -- "$BIN_SOURCE")/man"
 
 [[ -x "$BIN_SOURCE/v4linux" && -f "$BIN_SOURCE/v4linux" ]] ||
     die "expected executable $BIN_SOURCE/v4linux"
@@ -235,6 +360,8 @@ if mountpoint -q "$HOST_STAGING"; then
 fi
 
 install -d -m 0755 "$V4_DEST" "$PDP11_DEST" /usr/local/libexec
+
+install_man_pages
 
 UNINSTALL_SCRIPT="$PARENT_DIR/v4linux-uninstall.sh"
 UNINSTALL_BOOT="$PARENT_DIR/v4linux-uninstall-boot.sh"

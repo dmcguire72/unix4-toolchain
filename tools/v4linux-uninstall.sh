@@ -3,6 +3,9 @@ set -Eeuo pipefail
 
 V4_DEST=/opt/v4/sys
 PDP11_DEST=/opt/v4/bin
+MAN_DEST=/opt/v4/man
+MAN_LINK_ROOT=/usr/local/share/man
+MAN_INSTALLATION="$MAN_DEST/installation"
 DISPATCH_DEST=/usr/local/libexec/v4linux-dispatch
 GUEST_ROOT=/var/run/v4
 HOST_MOUNT="$GUEST_ROOT/host"
@@ -35,6 +38,66 @@ USAGE
 die() {
     echo "v4linux-uninstall: $*" >&2
     exit 1
+}
+
+valid_man_link_relative() {
+    local rel=$1
+    local section filename
+
+    [[ "$rel" == */* ]] || return 1
+    section=${rel%%/*}
+    filename=${rel#*/}
+
+    [[ "$section" == man* ]] || return 1
+    [[ -n "$filename" && "$filename" != */* ]] || return 1
+    [[ "$filename" != "." && "$filename" != ".." ]] || return 1
+}
+
+remove_installed_man_pages() {
+    local rel section link_dir link_file expected_target actual_target resolved_path
+
+    if [[ ! -e "$MAN_DEST" && ! -L "$MAN_DEST" ]]; then
+        return 0
+    fi
+    [[ ! -L "$MAN_DEST" ]] || die "refusing to remove symlinked man destination: $MAN_DEST"
+    [[ -d "$MAN_DEST" ]] || die "man destination is not a directory: $MAN_DEST"
+
+    [[ ! -L "$MAN_LINK_ROOT" ]] || die "refusing to traverse symlinked system man directory: $MAN_LINK_ROOT"
+    if [[ -d "$MAN_LINK_ROOT" ]]; then
+        resolved_path=$(realpath -e -- "$MAN_LINK_ROOT") || die "cannot resolve $MAN_LINK_ROOT"
+        [[ "$resolved_path" == "$MAN_LINK_ROOT" ]] || die "refusing non-canonical man directory: $MAN_LINK_ROOT"
+    fi
+
+    [[ ! -L "$MAN_INSTALLATION" ]] || die "refusing symlinked installation manifest: $MAN_INSTALLATION"
+    if [[ -e "$MAN_INSTALLATION" ]]; then
+        [[ -f "$MAN_INSTALLATION" ]] || die "man installation manifest is not a regular file: $MAN_INSTALLATION"
+
+        rel=""
+        while IFS= read -r -d '' rel || [[ -n "$rel" ]]; do
+            valid_man_link_relative "$rel" || die "invalid path in $MAN_INSTALLATION"
+            section=${rel%%/*}
+            link_dir="$MAN_LINK_ROOT/$section"
+            [[ ! -L "$link_dir" ]] || die "refusing to traverse symlinked man section directory: $link_dir"
+            [[ -d "$link_dir" ]] || continue
+
+            resolved_path=$(realpath -e -- "$link_dir") || die "cannot resolve $link_dir"
+            [[ "$resolved_path" == "$link_dir" ]] || die "refusing non-canonical man section directory: $link_dir"
+
+            link_file="$MAN_LINK_ROOT/$rel"
+            [[ -L "$link_file" ]] || continue
+            actual_target=$(readlink -- "$link_file") || die "cannot read symlink: $link_file"
+            expected_target="$MAN_DEST/$rel"
+            if [[ "$actual_target" == "$expected_target" ]]; then
+                rm -f -- "$link_file"
+            else
+                echo "Leaving man link with changed target: $link_file" >&2
+            fi
+        done < "$MAN_INSTALLATION"
+    else
+        echo "No man installation manifest found; no links under $MAN_LINK_ROOT were removed." >&2
+    fi
+
+    rm -rf -- "$MAN_DEST"
 }
 
 while (($#)); do
@@ -70,6 +133,8 @@ if [[ "$VERBOSE" == true ]]; then
 fi
 
 [[ $EUID -eq 0 ]] || die "run this script as root (for example, with sudo)."
+
+remove_installed_man_pages
 
 if systemctl list-unit-files v4linux.service &>/dev/null || [[ -f "$SERVICE_FILE" ]]; then
     systemctl disable --now v4linux.service 2>/dev/null || true
