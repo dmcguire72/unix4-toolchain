@@ -15,35 +15,61 @@ BINFMT_MARKER=/run/v4-binfmt-mounted-by-v4linux
 RUNTIME_SCRIPT="$PDP11_DEST/v4linux-runtime"
 SERVICE_FILE=/etc/systemd/system/v4linux.service
 
+VERBOSE=false
 PURGE_V4=0
 PURGE_BIN=0
 
 usage() {
     cat <<'USAGE'
-Usage: sudo ./v4linux-uninstall.sh [--purge-v4] [--purge-bin] [--purge-all]
+Usage: sudo ./v4linux-uninstall.sh [-v|--verbose] [--purge-v4] [--purge-bin] [--purge-all]
 
-Unregister v4linux handlers, unmount the V4 host/overlay mounts, and
-remove the installed dispatcher and tool symlinks.
-
-  --purge-v4    Also delete /opt/v4/sys
-  --purge-bin   Also delete /opt/v4/bin
-  --purge-all   Delete both /opt/v4/sys and /opt/v4/bin
+Options:
+  -v, --verbose   Trace executed commands with file and line numbers.
+  --purge-v4      Also delete /opt/v4/sys
+  --purge-bin     Also delete /opt/v4/bin
+  --purge-all     Delete both /opt/v4/sys and /opt/v4/bin
+  -h, --help      Show this help message
 USAGE
 }
 
-die() { echo "v4linux-uninstall: $*" >&2; exit 1; }
-[[ $EUID -eq 0 ]] || die "run this script as root (for example, with sudo)."
+die() {
+    echo "v4linux-uninstall: $*" >&2
+    exit 1
+}
 
 while (($#)); do
     case "$1" in
-        --purge-v4) PURGE_V4=1 ;;
-        --purge-bin) PURGE_BIN=1 ;;
-        --purge-all) PURGE_V4=1; PURGE_BIN=1 ;;
-        -h|--help) usage; exit 0 ;;
-        *) usage >&2; die "unknown option: $1" ;;
+        -v|--verbose)
+            VERBOSE=true
+            ;;
+        --purge-v4)
+            PURGE_V4=1
+            ;;
+        --purge-bin)
+            PURGE_BIN=1
+            ;;
+        --purge-all)
+            PURGE_V4=1
+            PURGE_BIN=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            die "unknown option: $1"
+            ;;
     esac
     shift
 done
+
+if [[ "$VERBOSE" == true ]]; then
+    export PS4='+ [${BASH_SOURCE##*/}:${LINENO}] '
+    set -x
+fi
+
+[[ $EUID -eq 0 ]] || die "run this script as root (for example, with sudo)."
 
 if systemctl list-unit-files v4linux.service &>/dev/null || [[ -f "$SERVICE_FILE" ]]; then
     systemctl disable --now v4linux.service 2>/dev/null || true
@@ -86,11 +112,10 @@ rmdir "$HOST_STAGING" 2>/dev/null || true
 rmdir "$GUEST_ROOT" 2>/dev/null || true
 rm -f -- "$DISPATCH_DEST"
 
-# Remove tool symlinks
-for tool in as as2 cc0 cc1 cc11 ld v4dis; do
+for tool in as as2 cc0 cc1 cc11 ld ar strip v4dis; do
     case "$tool" in
         cc11)  link_name="v4-cc" ;;
-        v4dis) link_name="v4-dis" ;;
+        v4dis) link_name="v4-disasm" ;;
         *)     link_name="v4-$tool" ;;
     esac
     rm -f -- "/usr/bin/$link_name"
@@ -125,6 +150,11 @@ if (( PURGE_V4 )); then
     rm -rf -- "$V4_DEST"
     echo "Removed $V4_DEST"
 fi
+
+rm -f -- \
+    "$PDP11_DEST/uninstall-script" \
+    "$PDP11_DEST/uninstall" \
+    /usr/bin/v4-uninstall
 
 rmdir /opt/v4 2>/dev/null || true
 

@@ -122,7 +122,7 @@ ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 # v4-ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 ```
 
-#### LD Options
+### Options
 
 - -s: Squash: write no symbol table at all (implies -x).
 - -n: Make the text read-only/shareable: magic 0410, text rounded to 64 bytes, data starting on an 8K boundary.
@@ -142,7 +142,7 @@ ar key afile [name ...]
 # v4-ar key afile [name ...]
 ```
 
-#### Keys
+### Keys
 
 - r: Replace the named files in the archive, or add them at the end if they are not there. Creates the archive if it does not already exist.
 - u: Update: replace a member only if the file of that name is newer than the member. With no names, every member for which a newer file exists in the current directory is replaced. Names that match no member are added.

@@ -1,10 +1,14 @@
-CC = cc
+CC ?= cc
 STRIP = strip
 CFLAGS = -std=gnu11 -O3 -Wall -Wno-unused-result
+DEPFLAGS = -MMD -MP
 
 SRC = src
+C_SRC = $(SRC)/c
+S1_SRC = $(SRC)/s1
 BLD = build
 BIN = bin
+OBJ = $(BLD)/obj
 
 ifeq ($(V),1)
   Q :=
@@ -14,9 +18,10 @@ else
   ECHO := @printf "  %-7s %s\n"
 endif
 
-PASS0 = $(SRC)/cc0.c $(SRC)/cc0t.c $(SRC)/ccrt.c
+PASS0 = $(C_SRC)/cc0.c $(C_SRC)/cc0t.c $(C_SRC)/ccrt.c
 TABLES = $(BLD)/regtab.c $(BLD)/efftab.c $(BLD)/cctab.c $(BLD)/sptab.c
-PASS1 = $(SRC)/cc1.c $(SRC)/cc1t.c $(SRC)/ccrt.c $(TABLES)
+.SECONDARY: $(TABLES)
+PASS1 = $(C_SRC)/cc1.c $(C_SRC)/cc1t.c $(C_SRC)/ccrt.c $(TABLES)
 
 EMULATOR_SRC = \
 	tools/emulator/main.c \
@@ -35,7 +40,13 @@ EMULATOR_SRC = \
 	tools/emulator/symbols.c \
 	tools/emulator/hooks.c
 
-EMULATOR_HDR = tools/emulator/pdp11.h
+EMULATOR_OBJ = $(patsubst tools/emulator/%.c,$(OBJ)/emulator/%.o,$(EMULATOR_SRC))
+
+AS_OBJ = $(OBJ)/s1/as1.o $(OBJ)/s1/astab.o
+AS2_OBJ = $(OBJ)/s1/as2.o $(OBJ)/s1/astab.o
+PASS0_OBJ = $(OBJ)/c/cc0.o $(OBJ)/c/cc0t.o $(OBJ)/c/ccrt.o
+TABLES_OBJ = $(OBJ)/bld/regtab.o $(OBJ)/bld/efftab.o $(OBJ)/bld/cctab.o $(OBJ)/bld/sptab.o
+PASS1_OBJ = $(OBJ)/c/cc1.o $(OBJ)/c/cc1t.o $(OBJ)/c/ccrt.o $(TABLES_OBJ)
 
 STRIP_TARGETS = $(BIN)/as $(BIN)/as2 $(BIN)/ld \
 				$(BIN)/ar $(BIN)/strip \
@@ -49,65 +60,85 @@ all: $(BIN)/as $(BIN)/as2 $(BIN)/ld \
 
 emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch
 
-$(BIN) $(BLD):
+$(BIN) $(BLD) $(OBJ)/emulator $(OBJ)/s1 $(OBJ)/c $(OBJ)/bld:
 	$(ECHO) MKDIR $@
 	$(Q)mkdir -p $@
 
-$(BIN)/as: src/as1.c src/astab.c src/as.h tables/chartab.inc | $(BIN)
+$(OBJ)/emulator/%.o: tools/emulator/%.c | $(OBJ)/emulator
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -Isrc -o $@ src/as1.c src/astab.c
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Itools/emulator -c -o $@ $<
 
-$(BIN)/ar: $(SRC)/ar.c | $(BIN)
+$(OBJ)/s1/%.o: $(S1_SRC)/%.c | $(OBJ)/s1
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Isrc -c -o $@ $<
 
-$(BIN)/as2: src/as2.c src/astab.c src/as.h | $(BIN)
+$(OBJ)/c/%.o: $(C_SRC)/%.c | $(OBJ)/c
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -Isrc -o $@ src/as2.c src/astab.c
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -I$(SRC) -I$(C_SRC) -c -o $@ $<
 
-$(BIN)/ld: $(SRC)/ld.c | $(BIN)
+$(OBJ)/bld/%.o: $(BLD)/%.c | $(OBJ)/bld
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -I$(C_SRC) -c -o $@ $<
 
-$(BIN)/cvopt: $(SRC)/cvopt.c | $(BIN)
+$(BIN)/as: $(AS_OBJ) | $(BIN)
+	$(ECHO) LD $@
+	$(Q)$(CC) $(CFLAGS) -o $@ $(AS_OBJ)
+
+$(BIN)/ar: $(S1_SRC)/ar.c | $(BIN)
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Wno-format-truncation -o $@ $<
+
+$(BIN)/as2: $(AS2_OBJ) | $(BIN)
+	$(ECHO) LD $@
+	$(Q)$(CC) $(CFLAGS) -o $@ $(AS2_OBJ)
+
+$(BIN)/ld: $(S1_SRC)/ld.c | $(BIN)
+	$(ECHO) CC $@
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -o $@ $<
+
+$(BIN)/cvopt: $(C_SRC)/cvopt.c | $(BIN)
+	$(ECHO) CC $@
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -o $@ $<
 
 $(BLD)/%tab.c: tables/%tab.s $(BIN)/cvopt | $(BLD)
 	$(ECHO) CVOPT $@
 	$(Q)$(BIN)/cvopt $< $@
 
-$(BIN)/cc0: $(PASS0) $(SRC)/cc0.h $(SRC)/ccw.h | $(BIN)
-	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -I$(SRC) -o $@ $(PASS0) -lm
+$(BIN)/cc0: $(PASS0_OBJ) | $(BIN)
+	$(ECHO) LD $@
+	$(Q)$(CC) $(CFLAGS) -o $@ $(PASS0_OBJ) -lm
 
-$(BIN)/cc1: $(PASS1) $(SRC)/cc1.h $(SRC)/ccw.h | $(BIN)
-	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -I$(SRC) -o $@ $(PASS1) -lm
+$(BIN)/cc1: $(PASS1_OBJ) | $(BIN)
+	$(ECHO) LD $@
+	$(Q)$(CC) $(CFLAGS) -o $@ $(PASS1_OBJ) -lm
 
-$(BIN)/cc11: $(SRC)/cc11.c | $(BIN)
+$(BIN)/cc11: $(C_SRC)/cc11.c | $(BIN)
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Wno-format-truncation -o $@ $<
 
-$(BIN)/strip: $(SRC)/strip.c | $(BIN)
+$(BIN)/strip: $(S1_SRC)/strip.c | $(BIN)
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -Wno-format-truncation -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Wno-format-truncation -o $@ $<
 
-$(BIN)/v4linux: $(EMULATOR_SRC) $(EMULATOR_HDR) | $(BIN)
-	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -Itools/emulator -o $@ $(EMULATOR_SRC) -lm
+$(BIN)/v4linux: $(EMULATOR_OBJ) | $(BIN)
+	$(ECHO) LD $@
+	$(Q)$(CC) $(CFLAGS) -o $@ $(EMULATOR_OBJ) -lm
 
 $(BIN)/v4dis: tools/v4dis/v4dis.c | $(BIN)
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -o $@ $<
 
 $(BIN)/v4linux-dispatch: tools/emulator/linux/v4linux-dispatch.c | $(BIN)
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -o $@ $<
 
-strip: all
-	$(ECHO) STRIP "$(STRIP_TARGETS)"
-	$(Q)$(STRIP) $(STRIP_TARGETS)
+STRIP_TASKS = $(addsuffix -strip,$(STRIP_TARGETS))
+
+strip: $(STRIP_TASKS)
+
+$(STRIP_TASKS): %-strip: %
+	$(ECHO) STRIP $<
+	$(Q)$(STRIP) $<
 
 check-as: all
 	$(ECHO) TEST $@
@@ -164,8 +195,25 @@ dis-check: $(BIN)/v4dis $(BIN)/v4linux
 	$(ECHO) TEST $@
 	@python3 tools/v4dis/roundtrip.py --v4dis $(BIN)/v4dis --emu $(BIN)/v4linux --root v4 --scan v4
 
+install: all
+	$(ECHO) INSTALL $(BIN)
+	$(Q)./tools/v4linux-setup.sh $(if $(filter 1,$(V)),-v,) $(BIN)
+
+uninstall:
+	$(ECHO) UNINSTALL
+	$(Q)./tools/v4linux-uninstall.sh $(if $(filter 1,$(V)),-v,) --purge-all
+
 clean:
 	$(ECHO) CLEAN "$(BIN) $(BLD)"
 	$(Q)rm -rf $(BIN) $(BLD)
 
-.PHONY: all emulator strip check check-as check-cc check-ld check-ar check-strip dis-check clean
+.PHONY: all emulator strip $(STRIP_TASKS) check check-as check-cc check-ld check-ar check-strip dis-check install uninstall clean
+
+DEPS := $(EMULATOR_OBJ:.o=.d) \
+        $(AS_OBJ:.o=.d) $(AS2_OBJ:.o=.d) \
+        $(PASS0_OBJ:.o=.d) $(PASS1_OBJ:.o=.d) $(TABLES_OBJ:.o=.d)
+
+DEPS += $(BIN)/ar.d $(BIN)/ld.d $(BIN)/cvopt.d $(BIN)/cc11.d \
+        $(BIN)/strip.d $(BIN)/v4dis.d $(BIN)/v4linux-dispatch.d
+
+-include $(DEPS)

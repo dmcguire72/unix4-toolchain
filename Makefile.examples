@@ -17,7 +17,7 @@ else
   ECHO := @printf "  %-7s %s\n"
 endif
 
-PLAIN_PROGRAMS = char crash float quine
+PLAIN_PROGRAMS = char crash float quine cal
 LIB_PROGRAMS = crypttest alloctest hello
 PROGRAMS = $(PLAIN_PROGRAMS) $(LIB_PROGRAMS)
 
