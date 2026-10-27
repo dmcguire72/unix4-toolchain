@@ -132,9 +132,19 @@ ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 
 A port for AR is currently being planned
 
+For now, use the emulator:
+
+```bash
+/opt/v4/sys/bin/ar ...
+```
+
 ## E. STRIP
 
 A port for STRIP is currently being planned
+
+```bash
+/opt/v4/sys/bin/strip ...
+```
 
 ## F. Userspace emulator
 
@@ -200,6 +210,19 @@ usr
 % echo hello world > file.txt
 % cat file.txt | /host/usr/bin/grep hello
 hello world
+```
+
+This also installs the native toolchain:
+
+```bash
+$ ls -l /usr/bin/v4*
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as -> /opt/v4/bin/as
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as2 -> /opt/v4/bin/as2
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc -> /opt/v4/bin/cc11
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc0 -> /opt/v4/bin/cc0
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc1 -> /opt/v4/bin/cc1
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-dis -> /opt/v4/bin/v4dis
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ld -> /opt/v4/bin/ld
 ```
 
 ## G. Disassembler
