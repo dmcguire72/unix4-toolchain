@@ -29,6 +29,30 @@ int host_to_guest_sig(int h)
 	return 0;
 }
 
+static void dump_guest_memory(void)
+{
+    char path[64];
+    FILE *f;
+
+    snprintf(path, sizeof path, "v4linux-memory-%ld.bin",
+             (long)getpid());
+
+    f = fopen(path, "wb");
+    if (!f) {
+        perror("v4linux: cannot create memory dump");
+        return;
+    }
+
+    if (fwrite(mem, 1, V4_MEM_LOGICAL, f) != V4_MEM_LOGICAL)
+        perror("v4linux: memory dump write failed");
+
+    if (fclose(f) != 0)
+        perror("v4linux: memory dump close failed");
+    else
+        fprintf(stderr, "v4linux: memory dumped to %s (%u bytes)\n",
+                path, (unsigned)V4_MEM_LOGICAL);
+}
+
 static inline void host_handler(int hs)
 {
 	int g = host_to_guest_sig(hs);
@@ -118,7 +142,8 @@ void die_by_sig(int g)
         trace_backtrace();
     }
 	if (trace & TR_SYS) tr_line("+++ killed by %s +++", trace_signame(g));
-	tty_restore();
+	dump_guest_memory();
+    tty_restore();
 	if (!hs) _exit(128 + g);
 	memset(&sa, 0, sizeof sa);
 	sa.sa_handler = SIG_DFL;
