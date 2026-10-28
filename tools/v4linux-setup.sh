@@ -35,7 +35,7 @@ PARENT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
 MAN_SOURCE=""
 MAN_DEST=/opt/v4/man
 MAN_LINK_ROOT=/usr/local/share/man
-MAN_INSTALLATION="$MAN_DEST/installation"
+MAN_INSTALLATION="$MAN_DEST/uninstall.conf"
 MAGIC_SOURCE="$PARENT_DIR/dumpinfo/v4dump.magic"
 MAGIC_DEST=/etc/magic
 MAGIC_BEGIN='# BEGIN v4linux managed v4dump.magic'
@@ -615,7 +615,6 @@ printf '  %-24s %s\n' "Runtime script:" "$RUNTIME_SCRIPT"
 printf '  %-24s %s\n' "Uninstaller bootstrap:" "/opt/v4/bin/uninstall"
 printf '  %-24s %s\n' "Uninstaller script:" "/opt/v4/bin/uninstall-script"
 printf '  %-24s %s\n' "Uninstaller symlink:" "/usr/bin/v4-uninstall"
-printf '  %-24s %s\n' "Magic database:" "$MAGIC_DEST"
 echo
 echo Symlinks:
 for tool in "${REQUIRED_TOOLS[@]}"; do
