@@ -1,0 +1,50 @@
+.TH ARCHIVE 5 "September 10, 1973" "UNIX" "File Formats"
+.SH NAME
+archive \- archive (library) file format
+.SH DESCRIPTION
+The archive command
+.I ar
+is used to combine several files into one.
+Archives are used mainly as libraries to be searched
+by the link-editor
+.I ld.
+.PP
+A file produced by
+.I ar
+has a magic number at the start,
+followed by the constituent files, each preceded by a file header.
+The magic number is
+.BR 177555 (8)
+(it was chosen to be unlikely to occur anywhere else).
+The header of each file is 16 bytes long:
+.TP
+.B 0-7
+File name, null padded on the right.
+.TP
+.B 8-11
+Modification time of the file.
+.TP
+.B 12
+User ID of file owner.
+.TP
+.B 13
+File mode.
+.TP
+.B 14-15
+File size.
+.PP
+If the file is an odd number of bytes long, it is padded
+with a null byte, but the size in the header is correct.
+.PP
+Notice there is no provision for empty areas in an archive
+file.
+.SH SEE ALSO
+.BR ar (1),
+.BR ld (1)
+.SH BUGS
+Names are only 8 characters, not 14.
+More important, there isn't enough room to
+store the proper mode,
+so
+.I ar
+always extracts in mode 666.
