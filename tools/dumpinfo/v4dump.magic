@@ -5,10 +5,11 @@
 >8  uleshort        x               \b, version %u
 >10 uleshort        x               \b.%u
 
->82 uleshort        0407            \b, a.out magic 0407 (PDP-11 executable)
->82 uleshort        0410            \b, a.out magic 0410 (PDP-11 pure executable)
+>82 uleshort        0407            \b, image: 0407='PDP-11 executable'
+>82 uleshort        0410            \b, image: 0410='PDP-11 pure executable'
 
 >52 uleshort        >0              \b, guest pid %u
+>54 uleshort        >0              \b, parent pid %u
 >24 ulelong         &1              (forked child)
 >48 ulelong         >0              \b, host pid %u
 
@@ -35,4 +36,4 @@
 
 >20 ulelong         x               \b, [crc32]:%08x
 
->40 leqdate         x               \b, dumped %s
+>40 leqdate         x               \b, dumped at %s

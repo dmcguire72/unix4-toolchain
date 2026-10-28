@@ -471,11 +471,12 @@ static void show_regs(void)
 	};
 	int i;
 
-	heading("Registers");
+	heading("CPU");
+	printf("  [N=%d Z=%d V=%d C=%d]\n", d.ps >> 3 & 1,
+	       d.ps >> 2 & 1, d.ps >> 1 & 1, d.ps & 1);
 	for (i = 0; i < V4D_NREGS; i++)
 		printf("  %s %06o%s", nm[i], d.r[i], i % 4 == 3 ? "\n" : "  ");
-	printf("  ps %06o  [N=%d Z=%d V=%d C=%d]\n", d.ps, d.ps >> 3 & 1,
-	       d.ps >> 2 & 1, d.ps >> 1 & 1, d.ps & 1);
+	printf("  ps %06o\n", d.ps);
 }
 
 static void show_fpu(void)
@@ -484,8 +485,8 @@ static void show_fpu(void)
 	const uint8_t *p = sect_data(V4D_SEC_FPU, &n);
 	unsigned fps, cc, nac, i;
 
-	heading("Floating point");
-	if (!p || n < 8) {
+	heading("FPU");
+	if (!p || n < V4D_NAC) {
 		puts("  (not recorded)");
 		return;
 	}
@@ -542,7 +543,7 @@ static void show_layout(void)
 		printf("  note        sp is above its starting value: "
 		       "stack underflow\n");
 	if (d.nreg) {
-		printf("\n  %-9s %-14s %s\n", "region", "range", "size");
+		printf("\n  %-9s %-14s  %s\n", "region", "range", "size");
 		for (i = 0; i < d.nreg; i++) {
 			const struct reg *r = &d.reg[i];
 
@@ -735,7 +736,7 @@ static void hexdump(uint32_t start, uint32_t len)
 {
 	uint32_t a, end = start + len, i;
 
-	heading("Memory");
+	heading("Memory dump");
 	if (start >= V4D_MEM_SIZE) {
 		puts("  (address outside the 64K address space)");
 		return;
