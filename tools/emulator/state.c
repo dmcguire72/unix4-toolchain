@@ -14,3 +14,8 @@ int host_enabled = 0;
 
 uint16_t prof_buf, prof_len, prof_off, prof_scale;
 int load_errno;
+
+uint16_t inst_pc;
+uint16_t fault_addr;
+int fault_valid;
+struct image_info img;

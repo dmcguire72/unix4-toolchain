@@ -1,0 +1,38 @@
+0   string          \x89V4DUMP\n    v4linux crash dump
+!:mime  application/x-v4linux-dump
+!:ext   v4dump
+
+>8  uleshort        x               \b, version %u
+>10 uleshort        x               \b.%u
+
+>82 uleshort        0407            \b, a.out magic 0407 (PDP-11 executable)
+>82 uleshort        0410            \b, a.out magic 0410 (PDP-11 pure executable)
+
+>52 uleshort        >0              \b, guest pid %u
+>24 ulelong         &1              (forked child)
+>48 ulelong         >0              \b, host pid %u
+
+>56 uleshort        0               \b, clean exit
+>56 uleshort        1               \b, killed by SIGHUP
+>56 uleshort        2               \b, killed by SIGINT
+>56 uleshort        3               \b, killed by SIGQUIT
+>56 uleshort        4               \b, killed by SIGILL (illegal instruction)
+>56 uleshort        5               \b, killed by SIGTRAP (trace/BPT trap)
+>56 uleshort        6               \b, killed by SIGIOT (IOT trap)
+>56 uleshort        7               \b, killed by SIGEMT (EMT trap)
+>56 uleshort        8               \b, killed by SIGFPE (floating exception)
+>56 uleshort        9               \b, killed by SIGKILL
+>56 uleshort        10              \b, killed by SIGBUS (bus error / odd address)
+>56 uleshort        11              \b, killed by SIGSEGV (segmentation violation)
+>56 uleshort        12              \b, killed by SIGSYS (bad system call)
+>56 uleshort        >12             \b, killed by signal %u
+
+>58 uleshort        &1
+>>60 uleshort       x               \b, fault addr 0%06o
+
+>62 uleshort        x               \b, pc %06o
+>76 uleshort        x               \b (sp %06o)
+
+>20 ulelong         x               \b, [crc32]:%08x
+
+>40 leqdate         x               \b, dumped %s

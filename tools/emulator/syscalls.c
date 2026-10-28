@@ -492,6 +492,11 @@ uint16_t cur_gpid(void)
 	return my_gpid;
 }
 
+uint16_t cur_gppid(void)
+{
+	return par_gpid;
+}
+
 void syscalls_init(void)
 {
 	time_shift_init();

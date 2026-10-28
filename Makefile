@@ -1,6 +1,6 @@
 CC ?= cc
 STRIP = strip
-CFLAGS ?= -std=gnu11 -O3 -Wall -Wno-unused-result
+CFLAGS = -std=gnu11 -O3 -Wall -Wno-unused-result
 DEPFLAGS = -MMD -MP
 
 USR ?= usr
@@ -43,7 +43,8 @@ EMULATOR_SRC = \
 	tools/emulator/cpu.c \
 	tools/emulator/trace.c \
 	tools/emulator/symbols.c \
-	tools/emulator/hooks.c
+	tools/emulator/hooks.c \
+	tools/emulator/dump.c
 
 EMULATOR_OBJ = $(patsubst tools/emulator/%.c,$(OBJ)/emulator/%.o,$(EMULATOR_SRC))
 
@@ -56,12 +57,13 @@ PASS1_OBJ = $(OBJ)/c/cc1.o $(OBJ)/c/cc1t.o $(OBJ)/c/ccrt.o $(TABLES_OBJ)
 STRIP_TARGETS = $(BIN)/as $(BIN)/as2 $(BIN)/ld \
 				$(BIN)/ar $(BIN)/strip \
                 $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cc11 \
-                $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis
+                $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis \
+                $(BIN)/dumpinfo
 
 all: $(BIN)/as $(BIN)/as2 $(BIN)/ld \
 	 $(BIN)/ar $(BIN)/strip \
      $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 \
-     $(BIN)/v4dis emulator
+     $(BIN)/v4dis $(BIN)/dumpinfo emulator
 
 emulator: $(BIN)/v4linux $(BIN)/v4linux-dispatch
 
@@ -71,7 +73,7 @@ $(BIN) $(BLD) $(OBJ)/emulator $(OBJ)/s1 $(OBJ)/c $(OBJ)/bld:
 
 $(OBJ)/emulator/%.o: tools/emulator/%.c | $(OBJ)/emulator
 	$(ECHO) CC $@
-	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Itools/emulator -c -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Itools/emulator -Itools/common -c -o $@ $<
 
 $(OBJ)/s1/%.o: $(S1_SRC)/%.c | $(OBJ)/s1
 	$(ECHO) CC $@
@@ -132,6 +134,10 @@ $(BIN)/v4linux: $(EMULATOR_OBJ) | $(BIN)
 $(BIN)/v4dis: tools/v4dis/v4dis.c | $(BIN)
 	$(ECHO) CC $@
 	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -o $@ $<
+
+$(BIN)/dumpinfo: tools/dumpinfo/dumpinfo.c tools/common/v4dump.h | $(BIN)
+	$(ECHO) CC $@
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -Itools/common -o $@ $<
 
 $(BIN)/v4linux-dispatch: tools/emulator/linux/v4linux-dispatch.c | $(BIN)
 	$(ECHO) CC $@
@@ -194,7 +200,11 @@ check-strip: $(BIN)/as $(BIN)/as2 $(BIN)/ld $(BIN)/strip
 	$(ECHO) TEST $@
 	@BIN=$(CURDIR)/$(BIN) sh tests/strip/run.sh check
 
-check: check-as check-cc check-ld check-ar check-strip
+check-dump: $(BIN)/as $(BIN)/as2 $(BIN)/v4linux $(BIN)/dumpinfo $(BIN)/v4dis
+	$(ECHO) TEST $@
+	@BIN=$(CURDIR)/$(BIN) sh tests/dump/run.sh
+
+check: check-as check-cc check-ld check-ar check-strip check-dump
 
 dis-check: $(BIN)/v4dis $(BIN)/v4linux
 	$(ECHO) TEST $@
@@ -212,13 +222,14 @@ clean:
 	$(ECHO) CLEAN "$(TO_CLEANUP)"
 	$(Q)rm -rf $(TO_CLEANUP)
 
-.PHONY: all emulator strip $(STRIP_TASKS) check check-as check-cc check-ld check-ar check-strip dis-check install uninstall clean
+.PHONY: all emulator strip $(STRIP_TASKS) check check-as check-cc check-ld check-ar check-strip check-dump dis-check install uninstall clean
 
 DEPS := $(EMULATOR_OBJ:.o=.d) \
         $(AS_OBJ:.o=.d) $(AS2_OBJ:.o=.d) \
         $(PASS0_OBJ:.o=.d) $(PASS1_OBJ:.o=.d) $(TABLES_OBJ:.o=.d)
 
 DEPS += $(BIN)/ar.d $(BIN)/ld.d $(BIN)/cvopt.d $(BIN)/cc11.d \
-        $(BIN)/strip.d $(BIN)/v4dis.d $(BIN)/v4linux-dispatch.d
+        $(BIN)/strip.d $(BIN)/v4dis.d $(BIN)/v4linux-dispatch.d \
+        $(BIN)/dumpinfo.d
 
 -include $(DEPS)

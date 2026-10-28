@@ -29,30 +29,6 @@ int host_to_guest_sig(int h)
 	return 0;
 }
 
-static void dump_guest_memory(void)
-{
-    char path[64];
-    FILE *f;
-
-    snprintf(path, sizeof path, "v4linux-memory-%ld.bin",
-             (long)getpid());
-
-    f = fopen(path, "wb");
-    if (!f) {
-        perror("v4linux: cannot create memory dump");
-        return;
-    }
-
-    if (fwrite(mem, 1, V4_MEM_LOGICAL, f) != V4_MEM_LOGICAL)
-        perror("v4linux: memory dump write failed");
-
-    if (fclose(f) != 0)
-        perror("v4linux: memory dump close failed");
-    else
-        fprintf(stderr, "v4linux: memory dumped to %s (%u bytes)\n",
-                path, (unsigned)V4_MEM_LOGICAL);
-}
-
 static inline void host_handler(int hs)
 {
 	int g = host_to_guest_sig(hs);
@@ -142,7 +118,7 @@ void die_by_sig(int g)
         trace_backtrace();
     }
 	if (trace & TR_SYS) tr_line("+++ killed by %s +++", trace_signame(g));
-	dump_guest_memory();
+	dump_write(g);
     tty_restore();
 	if (!hs) _exit(128 + g);
 	memset(&sa, 0, sizeof sa);
@@ -166,10 +142,14 @@ static inline void deliver(int g)
 				    trace_signame(g), PC, h);
 		else tr_line("--- %s {pc=%06o} ---", trace_signame(g), PC);
 	}
-	if (h & 1) return;
+	if (h & 1) {
+		fault_valid = 0;
+		return;
+	}
 	if (h) {
 		uint16_t sp = SP;
 
+		fault_valid = 0;
 		sigtab[g] = 0;
 		sp -= 2; mem[sp] = get_ps(); mem[(uint16_t)(sp + 1)] = get_ps() >> 8;
 		sp -= 2; mem[sp] = PC; mem[(uint16_t)(sp + 1)] = PC >> 8;

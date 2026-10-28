@@ -9,6 +9,7 @@ This repository contains a few components:
 - E. STRIP for Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)
 - F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.
 - G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
+- H. dumpinfo, an inspector for the crash dumps the emulator writes when a program dies.
 
 ## A. CC
 
@@ -25,6 +26,7 @@ The CC Compiler is built of many pieces, as the original had memory constraints:
 cc [-c] [-S] [-O] [-P] [-p] [-2 | -20] [-t] [options/files...]
 # if installed: 
 # v4-cc [-c] [-S] [-O] [-P] [-p] [-2 | -20] [-t] [options/files...]
+# man v4-cc
 ```
 
 #### CC Options
@@ -89,6 +91,7 @@ The AS Assembler is also split like the original:
 as [-] file ...
 # if installed: 
 # v4-as [-] file ...
+# man v4-as
 ```
 
 #### AS Options
@@ -120,6 +123,7 @@ as2 <tmp1> <tmp2> <tmp3> <tmp4> [-g]
 ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 # if installed: 
 # v4-ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
+# man v4-ld
 ```
 
 ### Options
@@ -140,6 +144,7 @@ ld [-s] [-n] [-x] [-r] [-d] [-u sym] [-e sym] [-l[x]] file ...
 ar key afile [name ...]
 # if installed: 
 # v4-ar key afile [name ...]
+# man v4-ar
 ```
 
 ### Keys
@@ -157,6 +162,7 @@ ar key afile [name ...]
 strip file ...
 # if installed: 
 # v4-strip file ...
+# man v4-strip
 ```
 
 ## F. Userspace emulator
@@ -265,9 +271,10 @@ lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-uninstall -> /opt/v4/bin/unin
 ### A. v4dis
 
 ```bash
-dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
+v4dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
 # if installed: 
-# v4-dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
+# v4-disasm [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
+# man v4-disasm
 ```
 
 #### Disassembler Options
@@ -279,6 +286,38 @@ dis [-a] [-k] [-n] [-s] [-v] [-L labels] <a.out>
 - `-v`: Emits stats out to `stderr`, which includes label allocation budgets, code/data byte distributions, and speculative walk validation counts.
 - `-L <labels>`: Maximum label budget (defaults to 700). Sets the limit on synthesized local labels (`L...`, `F...`, `D...`, `B...`) to avoid crashing the V4 assembler.
 - `<a.out>`: Input PDP-11 Unix V4 binary (`0407` executable or `0410` pure executable, use 'file <a.out>' for info).
+
+## H. Crash dumps (dumpinfo)
+
+When a guest program dies from a fatal signal, the emulator writes `v4linux-<pid>.v4dump` in the current directory. It is a V4DUMP file: a 256 byte header (magic `89 'V4DUMP' 0A`, version, CRC-32, the signal, fault address, address of the faulting instruction, r0-r7/PS, and the layout: text, data, bss, break, stack limit, initial sp) followed by sections for the memory map and bytes, FP accumulators, signal dispositions, open files, symbols, arguments, paths and the backtrace at crash time. Only live memory is stored (typically a few KB). The format is defined in `tools/common/v4dump.h`.
+
+```bash
+dumpinfo [-a] [-r] [-f] [-l] [-p] [-b] [-y] [-s N] [-m ADDR[,LEN]] [-c] [-x aout|raw -o FILE] <dumpfile>
+# if installed:
+# v4-dumpinfo [-a] [-r] [-f] [-l] [-p] [-b] [-y] [-s N] [-m ADDR[,LEN]] [-c] [-x aout|raw -o FILE] <dumpfile>
+# man v4-dumpinfo
+# man 5 v4dump
+```
+
+### Dumpinfo Options
+
+- (none): Summary: process, crash location, registers, memory layout.
+- `-a`: Everything except symbols and memory.
+- `-r`: Registers and condition codes.
+- `-f`: FP-11 accumulators and status.
+- `-l`: Memory layout, region map (text/data/bss/heap/unmapped/stack/args) and file sections.
+- `-p`: Paths, arguments, signal dispositions, open files.
+- `-b`: Backtrace recorded when the program died.
+- `-y`: Symbol table.
+- `-s N`: N words of stack from sp, with symbolized return addresses.
+- `-m ADDR[,LEN]`: Hex dump of memory (C number syntax, a leading `0` means octal).
+- `-c`: Only verify integrity; exit status 0 if intact.
+- `-x FORMAT -o FILE`: Extract the image. `aout` writes a 0407/0410 executable with the original symbols, for `v4-disasm` (text and data are as they were at the time of the crash); `raw` writes the flat 64K memory image.
+
+```bash
+v4-dumpinfo v4linux-1234.v4dump
+v4-dumpinfo -x aout -o crashed.out v4linux-1234.v4dump && v4-disasm -a crashed.out
+```
 
 ---
 

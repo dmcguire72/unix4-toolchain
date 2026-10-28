@@ -29,12 +29,17 @@ if [[ "$VERBOSE" == true ]]; then
     set -x
 fi
 
-PARENT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$(realpath -e -- "${BASH_SOURCE[0]}")"
+PARENT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
 
 MAN_SOURCE=""
 MAN_DEST=/opt/v4/man
 MAN_LINK_ROOT=/usr/local/share/man
 MAN_INSTALLATION="$MAN_DEST/installation"
+MAGIC_SOURCE="$PARENT_DIR/dumpinfo/v4dump.magic"
+MAGIC_DEST=/etc/magic
+MAGIC_BEGIN='# BEGIN v4linux managed v4dump.magic'
+MAGIC_END='# END v4linux managed v4dump.magic'
 
 V4_DEST=/opt/v4/sys
 PDP11_DEST=/opt/v4/bin
@@ -51,19 +56,19 @@ BINFMT_DIR=/proc/sys/fs/binfmt_misc
 BINFMT_MARKER=/run/v4-binfmt-mounted-by-v4linux
 RUNTIME_SCRIPT="$PDP11_DEST/v4linux-runtime"
 
-REQUIRED_TOOLS=(as as2 cc0 cc1 cc11 ar ld strip v4dis)
+REQUIRED_TOOLS=(as as2 cc0 cc1 cc11 ar ld strip v4dis dumpinfo)
 
 STOCK_URL="https://danielm.pages.dev/useful/unix_v4.tar.xz"
 SYMBOLS_URL="https://danielm.pages.dev/useful/unix_v4_debug.tar.xz"
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+SCRIPT_DIR="$PARENT_DIR"
 DOWNLOAD_SH="$SCRIPT_DIR/download.sh"
 [[ -f "$DOWNLOAD_SH" ]] || DOWNLOAD_SH="./download.sh"
 
 CLEANUP_DIRS=()
 cleanup() {
     for item in "${CLEANUP_DIRS[@]}"; do
-        rm -rf "$item" 2>/dev/null || true
+        rm -rf -- "$item" 2>/dev/null || true
     done
 }
 trap cleanup EXIT
@@ -73,7 +78,7 @@ usage() {
 Usage: sudo ./v4linux-setup.sh [-v|--verbose] /path/to/v4linux-bin-dir [/path/or/url/to/extracted-v4-root/]
 
 Options:
-  -v, --verbose   Log executed commands with file and line numbers.
+ -v, --verbose   Log executed commands with file and line numbers.
 
 You can get Unix v4 from ${STOCK_URL}.
 If symbols are needed: ${SYMBOLS_URL}.
@@ -97,6 +102,7 @@ is_url() {
 
 resolve_root_dir() {
     local dir=$1
+    local sub
     if [[ ! -d "$dir/bin" ]]; then
         for sub in "$dir"/*; do
             if [[ -d "$sub/bin" ]]; then
@@ -124,7 +130,7 @@ valid_man_link_relative() {
 install_man_pages() {
     local section_dir page section base rel dest_dir dest_file link_dir link_file
     local old_rel old_section old_link_dir old_link_file expected_target actual_target
-    local resolved_root resolved_dir
+    local resolved_root resolved_dir index
     local -a sources=() relatives=()
     local -A seen=()
 
@@ -221,8 +227,60 @@ install_man_pages() {
 
         printf '%s\0' "$rel" >> "$MAN_INSTALLATION"
     done
+}
 
-    echo "Installed ${#sources[@]} compressed man page(s) under $MAN_DEST."
+install_magic_database() {
+    local tmp owner mode
+
+    [[ -f "$MAGIC_SOURCE" && ! -L "$MAGIC_SOURCE" ]] ||
+        die "expected regular magic definition file: $MAGIC_SOURCE"
+    [[ -r "$MAGIC_SOURCE" ]] || die "cannot read magic definition file: $MAGIC_SOURCE"
+    [[ ! -L "$MAGIC_DEST" ]] || die "refusing symlinked magic database: $MAGIC_DEST"
+    if [[ -e "$MAGIC_DEST" && ! -f "$MAGIC_DEST" ]]; then
+        die "magic database is not a regular file: $MAGIC_DEST"
+    fi
+
+    owner="0:0"
+    mode=644
+    if [[ -e "$MAGIC_DEST" ]]; then
+        owner=$(stat -c '%u:%g' -- "$MAGIC_DEST") || die "cannot stat $MAGIC_DEST"
+        mode=$(stat -c '%a' -- "$MAGIC_DEST") || die "cannot stat $MAGIC_DEST"
+    fi
+
+    tmp=$(mktemp /etc/.magic.v4linux.XXXXXX) || die "cannot create temporary magic database"
+    CLEANUP_DIRS+=("$tmp")
+
+    if [[ -e "$MAGIC_DEST" ]]; then
+        awk -v begin="$MAGIC_BEGIN" -v end="$MAGIC_END" '
+            $0 == begin {
+                if (inside || found_begin) { bad = 1; next }
+                inside = 1
+                found_begin = 1
+                next
+            }
+            $0 == end {
+                if (!inside || found_end) { bad = 1; next }
+                inside = 0
+                found_end = 1
+                next
+            }
+            !inside { print }
+            END {
+                if (inside || (found_begin != found_end) || bad) exit 2
+            }
+        ' "$MAGIC_DEST" > "$tmp" || die "malformed v4linux magic block in $MAGIC_DEST; refusing to modify it"
+    fi
+
+    if [[ -s "$tmp" ]]; then
+        printf '\n' >> "$tmp"
+    fi
+    printf '%s\n' "$MAGIC_BEGIN" >> "$tmp"
+    cat -- "$MAGIC_SOURCE" >> "$tmp" || die "cannot append $MAGIC_SOURCE"
+    printf '\n%s\n' "$MAGIC_END" >> "$tmp"
+
+    chown -- "$owner" "$tmp"
+    chmod "$mode" "$tmp"
+    mv -f -- "$tmp" "$MAGIC_DEST"
 }
 
 [[ $EUID -eq 0 ]] || die "run this script as root (for example, with sudo)."
@@ -234,7 +292,6 @@ install_man_pages() {
 BIN_SOURCE=$(realpath -e -- "$1") || die "cannot resolve bin source: $1"
 [[ -d "$BIN_SOURCE" ]] || die "bin source is not a directory: $BIN_SOURCE"
 
-# Man pages live in ../man relative to the supplied bin directory.
 MAN_SOURCE="$(dirname -- "$BIN_SOURCE")/man"
 
 [[ -x "$BIN_SOURCE/v4linux" && -f "$BIN_SOURCE/v4linux" ]] ||
@@ -247,6 +304,9 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
     [[ -f "$BIN_SOURCE/$tool" ]] ||
         die "expected file $BIN_SOURCE/$tool"
 done
+
+[[ -f "$MAGIC_SOURCE" && ! -L "$MAGIC_SOURCE" ]] ||
+    die "expected regular magic definition file: $MAGIC_SOURCE"
 
 V4_INPUT="${2:-}"
 
@@ -264,7 +324,7 @@ if [[ -n "$V4_INPUT" ]]; then
 
         echo "Extracting archive..."
         tar -xf "$TMP_ARCHIVE" -C "$TMP_EXTRACT"
-        rm -f "$TMP_ARCHIVE"
+        rm -f -- "$TMP_ARCHIVE"
 
         V4_SOURCE=$(resolve_root_dir "$TMP_EXTRACT")
     else
@@ -303,7 +363,7 @@ else
         read -r -p "'$TARGET_DIR' already exists. Redownload? [y/N]: " redownload
         case "$redownload" in
             [yY]|[yY][eE][sS])
-                rm -rf "$TARGET_DIR"
+                rm -rf -- "$TARGET_DIR"
                 ;;
             *)
                 DO_DOWNLOAD=false
@@ -315,7 +375,7 @@ else
         [[ -f "$DOWNLOAD_SH" ]] || die "cannot find $DOWNLOAD_SH to download $TARGET_URL"
         chmod +x "$DOWNLOAD_SH" 2>/dev/null || true
 
-        mkdir -p "$TARGET_DIR"
+        mkdir -p -- "$TARGET_DIR"
         TMP_ARCHIVE=$(mktemp /tmp/v4_dl.XXXXXX.tar.xz)
         CLEANUP_DIRS+=("$TMP_ARCHIVE")
 
@@ -324,7 +384,7 @@ else
 
         echo "Extracting into $TARGET_DIR..."
         tar -xf "$TMP_ARCHIVE" -C "$TARGET_DIR"
-        rm -f "$TMP_ARCHIVE"
+        rm -f -- "$TMP_ARCHIVE"
     fi
 
     V4_RESOLVED=$(realpath -e -- "$TARGET_DIR") || die "cannot resolve $TARGET_DIR"
@@ -352,7 +412,7 @@ check_not_nested() {
 }
 
 if mountpoint -q "$GUEST_ROOT"; then
-    die "$GUEST_ROOT is already mounted; run v4linux-uninstall.sh first, then set it up again."
+    die "$GUEST_ROOT is already mounted; run sudo v4-uninstall, then set it up again."
 fi
 
 if mountpoint -q "$HOST_STAGING"; then
@@ -362,9 +422,13 @@ fi
 install -d -m 0755 "$V4_DEST" "$PDP11_DEST" /usr/local/libexec
 
 install_man_pages
+install_magic_database
 
 UNINSTALL_SCRIPT="$PARENT_DIR/v4linux-uninstall.sh"
 UNINSTALL_BOOT="$PARENT_DIR/v4linux-uninstall-boot.sh"
+
+[[ -f "$UNINSTALL_SCRIPT" ]] || die "cannot find $UNINSTALL_SCRIPT"
+[[ -f "$UNINSTALL_BOOT" ]] || die "cannot find $UNINSTALL_BOOT"
 
 install -d -m 0755 /opt/v4/bin
 
@@ -390,9 +454,10 @@ install -m 0755 "$BIN_SOURCE/v4linux-dispatch" "$DISPATCH_DEST"
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
     case "$tool" in
-        cc11)  link_name="v4-cc" ;;
-        v4dis) link_name="v4-disasm" ;;
-        *)     link_name="v4-$tool" ;;
+        cc11)     link_name="v4-cc" ;;
+        v4dis)    link_name="v4-disasm" ;;
+        dumpinfo) link_name="v4-dumpinfo" ;;
+        *)        link_name="v4-$tool" ;;
     esac
     ln -sf "$PDP11_DEST/$tool" "/usr/bin/$link_name"
 done
@@ -470,8 +535,6 @@ printf '%s\n' ':v4linux-aout-0407:M::\x07\x01::/usr/local/libexec/v4linux-dispat
 printf '%s\n' ':v4linux-aout-0410:M::\x08\x01::/usr/local/libexec/v4linux-dispatch:' \
     > "$BINFMT_DIR/register"
 
-echo "Installing persistence..."
-
 cat <<EOF > "$RUNTIME_SCRIPT"
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -539,20 +602,67 @@ ExecStop=/bin/umount -R $GUEST_ROOT
 WantedBy=multi-user.target
 EOF
 
+echo
 systemctl daemon-reload
 systemctl enable v4linux.service
 
-echo "Persistence installed via systemd."
+echo
+echo Info:
+printf '  %-24s %s\n' "Unix V4 root:" "$V4_DEST"
+printf '  %-24s %s\n' "Emulator:" "$PDP11_DEST/v4linux"
+printf '  %-24s %s\n' "Dispatcher:" "$DISPATCH_DEST"
+printf '  %-24s %s\n' "Runtime script:" "$RUNTIME_SCRIPT"
+printf '  %-24s %s\n' "Uninstaller bootstrap:" "/opt/v4/bin/uninstall"
+printf '  %-24s %s\n' "Uninstaller script:" "/opt/v4/bin/uninstall-script"
+printf '  %-24s %s\n' "Uninstaller symlink:" "/usr/bin/v4-uninstall"
+printf '  %-24s %s\n' "Magic database:" "$MAGIC_DEST"
+echo
+echo Symlinks:
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    case "$tool" in
+        cc11)     link_name="v4-cc" ;;
+        v4dis)    link_name="v4-disasm" ;;
+        dumpinfo) link_name="v4-dumpinfo" ;;
+        *)        link_name="v4-$tool" ;;
+    esac
+    printf '  %-24s %s\n' "$tool" "/usr/bin/$link_name"
+done
+echo
+echo Manual pages:
+printf '  %-24s %s\n' "Installed man pages:" "$MAN_DEST"
+printf '  %-24s %s\n' "System man links:" "$MAN_LINK_ROOT"
+printf '  %-24s %s\n' "Installation manifest:" "$MAN_INSTALLATION"
+if [[ -f "$MAN_INSTALLATION" ]]; then
+    man_count=0
+    while IFS= read -r -d '' rel; do
+        printf '    %s\n' "$MAN_LINK_ROOT/$rel"
+        ((man_count += 1))
+    done < "$MAN_INSTALLATION"
+    printf '  Total symlinked man pages: %s\n' "$man_count"
+fi
+echo
+echo Guest:
+printf '  %-24s %s\n' "Guest root:" "$GUEST_ROOT"
+printf '  %-24s %s\n' "Guest temporary files:" "$TMP_MOUNT (tmpfs)"
+printf '  %-24s %s\n' "Host filesystem view:" "$HOST_MOUNT"
+printf '  %-24s %s\n' "Home directory view:" "$HOME_MOUNT"
+printf '  %-24s %s\n' "Overlay upper layer:" "$UPPER_DIR"
+printf '  %-24s %s\n' "Overlay work directory:" "$WORK_DIR"
+echo
+echo Services:
+printf '  %-24s %s\n' "Systemd service:" "/etc/systemd/system/v4linux.service"
+printf '  %-24s %s\n' "Service enabled:" "$(systemctl is-enabled v4linux.service 2>/dev/null || echo unknown)"
+service_state=$(systemctl is-active v4linux.service 2>/dev/null || true)
+printf '  %-24s %s\n' "Service state:" "${service_state:-unknown}"
+echo
+echo binfmt_misc:
+for name in v4linux-aout-0407 v4linux-aout-0410; do
+    if [[ -f "$BINFMT_DIR/$name" ]]; then
+        printf '  %-24s registered\n' "$name"
+    else
+        printf '  %-24s not found\n' "$name"
+    fi
+done
 
-cat <<EOF
-setup complete.
-  V4 lower root: $V4_DEST
-  Emulator:      $PDP11_DEST/v4linux
-  Guest root:    $GUEST_ROOT (/)
-  Guest /tmp:    tmpfs at $TMP_MOUNT
-  Host view:     $HOST_MOUNT (/host)
-  Home view:     $HOME_MOUNT (/home)
-  Dispatcher:    $DISPATCH_DEST
-  Magic 0407:    registered (07 01)
-  Magic 0410:    registered (08 01)
-EOF
+echo
+echo "install complete."

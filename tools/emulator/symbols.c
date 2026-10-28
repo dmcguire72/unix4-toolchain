@@ -12,6 +12,7 @@ struct sym {
 
 static struct sym *symtab;
 static unsigned nsyms;
+static uint8_t *symraw;
 
 #define SYM_EXT		040
 #define SYM_TYPE(f)	((f) & 037)
@@ -28,7 +29,9 @@ static uint16_t peek(uint16_t a)
 void sym_free(void)
 {
 	free(symtab);
+	free(symraw);
 	symtab = NULL;
+	symraw = NULL;
 	nsyms = 0;
 }
 
@@ -51,14 +54,18 @@ void sym_load(FILE *f, const uint8_t *hdr)
 		return;
 	n = symlen / 12;
 	symtab = calloc(n, sizeof *symtab);
-	if (!symtab)
+	symraw = malloc((size_t)n * sizeof e);
+	if (!symtab || !symraw) {
+		sym_free();
 		return;
+	}
 	for (i = 0; i < n; i++) {
 		struct sym *s = &symtab[nsyms];
 		const uint8_t *p = e;
 
 		if (fread(e, 1, 12, f) != 12)
 			break;
+		memcpy(symraw + (size_t)nsyms * sizeof e, e, sizeof e);
 		if (p[0] == '_')
 			p++;
 		for (k = 0; k < 8 && p < e + 8 && *p; k++, p++)
@@ -73,6 +80,12 @@ void sym_load(FILE *f, const uint8_t *hdr)
 int sym_count(void)
 {
 	return nsyms;
+}
+
+const uint8_t *sym_raw(unsigned *len)
+{
+	*len = nsyms * 12;
+	return symraw;
 }
 
 static int is_local_label(const char *n)

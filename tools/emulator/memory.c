@@ -35,7 +35,16 @@ void mem_fault(uint16_t a)
 		if (a >= stack_lo)
 			return;
 	}
+	fault_addr = a;
+	fault_valid = 1;
 	trap_sig(V4_SIGSEG);
+}
+
+void bus_fault(uint16_t a)
+{
+	fault_addr = a;
+	fault_valid = 1;
+	trap_sig(V4_SIGBUS);
 }
 
 void die(const char *m, ...)

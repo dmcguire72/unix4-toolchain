@@ -2,8 +2,43 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+static void record_image(const char *path, uint16_t magic, uint16_t ts,
+			 uint16_t ds, uint16_t bs, size_t dbase, size_t image_end,
+			 uint16_t sp, int argc, char **argv)
+{
+	size_t len = 0;
+	int i;
+	char *p;
+
+	free(img.path);
+	free(img.argv);
+	memset(&img, 0, sizeof img);
+	img.path = strdup(path);
+	img.magic = magic;
+	img.ts = ts;
+	img.ds = ds;
+	img.bs = bs;
+	img.dbase = magic == V4_AOUT_NMAGIC ? (uint32_t)dbase : ts;
+	img.image_end = (uint32_t)image_end;
+	img.initial_sp = sp;
+	for (i = 0; i < argc; i++)
+		len += strlen(argv[i]) + 1;
+	img.argv = malloc(len ? len : 1);
+	if (!img.argv)
+		return;
+	for (p = img.argv, i = 0; i < argc; i++) {
+		size_t n = strlen(argv[i]) + 1;
+
+		memcpy(p, argv[i], n);
+		p += n;
+	}
+	img.argc = argc;
+	img.argv_len = len;
+}
 
 int load_image(const char *path, int argc, char **argv)
 {
@@ -73,6 +108,7 @@ int load_image(const char *path, int argc, char **argv)
 	SP = sp;
 	image_end = (magic == V4_AOUT_NMAGIC) ? dbase + ds + bs : (size_t)ts + ds + bs;
 	mem_reset(image_end);
+	record_image(path, magic, ts, ds, bs, dbase, image_end, sp, argc, argv);
 	sym_load(f, h);
 	hooks_load();
 	trace_calls_reset();

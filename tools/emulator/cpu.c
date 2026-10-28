@@ -513,6 +513,7 @@ static inline __attribute__((always_inline)) void step_one(void)
 			trace_cpu();
 	}
 
+	inst_pc = PC;
 	ir = rdw(PC);
 	PC += 2;
 

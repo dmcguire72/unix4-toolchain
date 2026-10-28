@@ -92,6 +92,11 @@ extern uint32_t stack_lo;
 void mem_reset(uint32_t image_end);
 void mem_set_brk(uint32_t end);
 void mem_fault(uint16_t a);
+void bus_fault(uint16_t a) __attribute__((noreturn));
+
+extern uint16_t inst_pc;
+extern uint16_t fault_addr;
+extern int fault_valid;
 
 static inline void mchk(uint16_t a)
 {
@@ -106,14 +111,14 @@ static inline void mem_check(uint16_t a)
 
 static inline uint16_t rdw(uint16_t a)
 {
-	if (UNLIKELY(a & 1)) trap_sig(V4_SIGBUS);
+	if (UNLIKELY(a & 1)) bus_fault(a);
 	mchk(a);
 	return mem[a] | (mem[a + 1] << 8);
 }
 
 static inline void wrw(uint16_t a, uint16_t v)
 {
-	if (UNLIKELY(a & 1)) trap_sig(V4_SIGBUS);
+	if (UNLIKELY(a & 1)) bus_fault(a);
 	mchk(a);
 	mem[a] = v;
 	mem[a + 1] = v >> 8;
@@ -206,6 +211,7 @@ int  load_image(const char *path, int argc, char **argv);
 int  exec_host_program(const char *path, char **argv);
 void mappath(uint16_t a, char *out);
 uint16_t cur_gpid(void);
+uint16_t cur_gppid(void);
 long guest_time_shift(void);
 
 #pragma endregion
@@ -216,6 +222,7 @@ int  disasm(uint16_t pc, char *out, size_t n);
 void sym_load(FILE *f, const uint8_t *hdr);
 void sym_free(void);
 int  sym_count(void);
+const uint8_t *sym_raw(unsigned *len);
 int  sym_lookup(const char *name, uint16_t *v);
 const char *sym_exact(uint16_t v);
 const char *sym_nearest(uint16_t addr, unsigned *off);
@@ -226,6 +233,24 @@ int  call_target(uint16_t inst, uint16_t ret);
 int  call_nargs(uint16_t inst, uint16_t ret);
 void fmt_arg(char *out, size_t n, uint16_t v);
 void backtrace_walk(void (*emit)(const char *line));
+
+#pragma endregion
+#pragma region V4DUMP
+
+struct image_info {
+	char     *path;
+	uint16_t magic;
+	uint16_t ts, ds, bs;
+	uint32_t dbase;
+	uint32_t image_end;
+	uint16_t initial_sp;
+	int      argc;
+	char     *argv;
+	size_t   argv_len;
+};
+extern struct image_info img;
+
+int  dump_write(int gsig);
 
 #pragma endregion
 #pragma region HOOKS
