@@ -11,3 +11,7 @@ ttt.k
 /.v4
 /tmp
 *.v4dump
+**/__pycache__
+acast
+*.cast
+*.gif
