@@ -63,17 +63,17 @@ DEPFILES = $(patsubst $(OBJ)/%.o,$(DEP)/%.d,$(sort \
     $(PASS1_OBJ) \
     $(TABLES_OBJ)))
 
-BIN_DEP_NAMES = ar ld cvopt cc11 strip v4dis v4linux-dispatch dumpinfo
+BIN_DEP_NAMES = ar ld tp cvopt cc11 strip v4dis v4linux-dispatch dumpinfo
 BIN_DEPS = $(addprefix $(DEP)/bin/,$(addsuffix .d,$(BIN_DEP_NAMES)))
 
 STRIP_TARGETS = $(BIN)/as $(BIN)/as2 $(BIN)/ld \
-                $(BIN)/ar $(BIN)/strip \
+                $(BIN)/ar $(BIN)/strip $(BIN)/tp \
                 $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cc11 \
                 $(BIN)/v4linux $(BIN)/v4linux-dispatch $(BIN)/v4dis \
                 $(BIN)/dumpinfo
 
 all: $(BIN)/as $(BIN)/as2 $(BIN)/ld \
-     $(BIN)/ar $(BIN)/strip \
+     $(BIN)/ar $(BIN)/strip $(BIN)/tp \
      $(BIN)/cc0 $(BIN)/cc1 $(BIN)/cvopt $(BIN)/cc11 \
      $(BIN)/v4dis $(BIN)/dumpinfo emulator
 
@@ -146,6 +146,10 @@ $(BIN)/v4linux: $(EMULATOR_OBJ) | $(BIN)
 $(BIN)/v4dis: tools/v4dis/v4dis.c | $(BIN) $(DEP)/bin
 	$(ECHO) CC $@
 	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -MF $(DEP)/bin/v4dis.d -MT $@ -o $@ $<
+
+$(BIN)/tp: $(S1_SRC)/tp.c | $(BIN) $(DEP)/bin
+	$(ECHO) CC $@
+	$(Q)$(CC) $(CFLAGS) $(DEPFLAGS) -MF $(DEP)/bin/tp.d -MT $@ -o $@ $<
 
 $(BIN)/dumpinfo: tools/dumpinfo/dumpinfo.c tools/common/v4dump.h | $(BIN) $(DEP)/bin
 	$(ECHO) CC $@
