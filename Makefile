@@ -224,7 +224,7 @@ dis-check: $(BIN)/v4dis $(BIN)/v4linux
 
 install: all
 	$(ECHO) INSTALL $(BIN)
-	$(Q)./tools/v4linux-setup.sh $(if $(filter 1,$(V)),-v,) $(BIN)
+	$(Q)./tools/v4linux-setup.py $(if $(filter 1,$(V)),-v,) $(BIN)
 
 uninstall:
 	$(ECHO) UNINSTALL
