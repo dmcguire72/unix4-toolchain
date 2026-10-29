@@ -805,10 +805,10 @@ static void extract_raw(FILE *f)
 	fwrite(d.mem, 1, V4D_MEM_SIZE, f);
 }
 
-static void usage(FILE *o)
+static void usage(FILE *o, const char *program)
 {
 	fprintf(o,
-"usage: dumpinfo [options] dumpfile\n"
+"usage: %s [options] dumpfile\n"
 "\n"
 "Inspect a v4linux crash dump (v4linux-PID.v4dump).  With no selection\n"
 "options a summary is printed: process, crash, registers, memory layout.\n"
@@ -829,7 +829,7 @@ static void usage(FILE *o)
 "                      v4-disasm; text and data are as they were at the\n"
 "                      time of the crash\n"
 "                raw   the flat 64K memory image\n"
-"  -h          this help\n");
+"  -h          this help\n", program);
 }
 
 static uint32_t parse_num(const char *s, const char *what)
@@ -880,12 +880,12 @@ int main(int argc, char **argv)
 		}
 		case 'x': xfmt = optarg; break;
 		case 'o': outpath = optarg; break;
-		case 'h': usage(stdout); return 0;
-		default: usage(stderr); return 2;
+		case 'h': usage(stdout, argv[0]); return 0;
+		default: usage(stderr, argv[0]); return 2;
 		}
 	}
 	if (optind != argc - 1) {
-		usage(stderr);
+		usage(stderr, argv[0]);
 		return 2;
 	}
 	if (xfmt && strcmp(xfmt, "aout") && strcmp(xfmt, "raw"))

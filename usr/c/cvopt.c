@@ -264,7 +264,7 @@ main(int argc, char **argv)
 		argc--, argv++;
 	}
 	if (argc > 3) {
-		fprintf(stderr, "usage: cvopt [-n] [infile [outfile]]\n");
+		fprintf(stderr, "usage: %s [-n] [infile [outfile]]\n", argv[0]);
 		return 1;
 	}
 	if (argc > 1 && (in = fopen(argv[1], "r")) == NULL) {

@@ -90,7 +90,7 @@ int parse_args(int argc, char **argv, int *arg_index,
 
     if (ai >= argc) {
         fprintf(stderr,
-                "usage: v4linux [-r root] [--chdir dir] [--host] [-x] [-s] [-t] [-F] [-f] [-b] [-T] [-o file]\n"
+                "usage: %s [-r root] [--chdir dir] [--host] [-x] [-s] [-t] [-F] [-f] [-b] [-T] [-o file]\n"
                 "              prog args...\n"
                 "  --host  enable host integrations\n"
                 "  -s  trace guest system calls (strace style)\n"
@@ -98,7 +98,7 @@ int parse_args(int argc, char **argv, int *arg_index,
                 "  -f  trace function calls and their args (--trace-func)\n"
                 "  -b  stack trace on crash (--backtrace)\n"
                 "  -T  all traces, -o  write trace to file\n"
-                "env: V4LINUX_TRACE_{CPU,SYS,FPU,FUNC,STACK,ALL}=1, V4LINUX_TRACE_FILE=path\n");
+                "env: V4LINUX_TRACE_{CPU,SYS,FPU,FUNC,STACK,ALL}=1, V4LINUX_TRACE_FILE=path\n", argv[0]);
         return 2;
     }
 

@@ -1157,7 +1157,7 @@ main(int argc, char **argv)
 		curarg = argv;
 	}
 	if (nargs < 2 && argc < 2) {
-		fprintf(stderr, "usage: as [-] file ...\n");
+		fprintf(stderr, "usage: %s [-] file ...\n", argv[0]);
 		return ASEXIT_ERR;
 	}
 	mktmpnames();

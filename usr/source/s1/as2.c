@@ -1368,7 +1368,7 @@ main(int argc, char **argv)
 	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
 		signal(SIGINT, sintr);
 	if (argc < 5) {
-		fprintf(stderr, "usage: as2 tmp1 tmp2 tmp3 tmp4 [-g]\n");
+		fprintf(stderr, "usage: %s tmp1 tmp2 tmp3 tmp4 [-g]\n", argv[0]);
 		return ASEXIT_ERR;
 	}
 	if (argc >= 6)
