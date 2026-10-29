@@ -1,0 +1,122 @@
+.TH V4-TP 1 "October 29, 2026" "unix4-toolchain"
+.ad l
+.ds AD l
+.nh
+.cflags 0 .?!
+.ds PROG v4-tp
+.SH NAME
+\*[PROG] \- create, list and extract UNIX Fourth Edition tp archives
+.SH SYNOPSIS
+.B \*[PROG] \-c
+[\fB\-vmD\fR] [\fB\-f\fR \fIarchive\fR] [\fB\-C\fR \fIdir\fR] [\fB\-b\fR \fIboot\fR]
+[\fB\-T\fR \fIlist\fR] [\fB\-U\fR \fIuid\fR] [\fB\-G\fR \fIgid\fR] [\fIfile\fR ...]
+.br
+.B \*[PROG] \-x
+[\fB\-vpi\fR] [\fB\-f\fR \fIarchive\fR] [\fB\-C\fR \fIdir\fR] [\fIname\fR ...]
+.br
+.B \*[PROG] \-t
+[\fB\-v\fR] [\fB\-f\fR \fIarchive\fR] [\fIname\fR ...]
+.br
+.B \*[PROG] \-k
+[\fB\-f\fR \fIarchive\fR]
+.br
+.B \*[PROG] \-B
+\fIbootfile\fR \fB\-f\fR \fIarchive\fR
+.SH DESCRIPTION
+.B \*[PROG]
+works on raw images of the tape format of the same name used by the Fourth
+Edition of UNIX (1973): a 512-byte boot block, a directory of 64-byte entries,
+then the files, each starting on a block boundary.
+It does not understand the SIMH ".tap" record wrapper; unwrap such images first
+(a warning is printed if one is detected).
+.PP
+Only regular files are archived, under their relative path names (at most 31
+characters). Directories are created when extracting.
+.SH FUNCTIONS
+.TP
+.B \-c
+Create an archive from the named files; directories are archived recursively in
+byte order. With no file arguments and no
+.B \-T
+the current directory is archived.
+.TP
+.B \-x
+Extract the named entries (or everything). A name selects itself and
+everything below it. Modification times are restored; permissions are
+restored subject to the umask.
+.TP
+.B \-t
+List names; with
+.B \-v
+also mode, uid/gid, size, UTC time and first block.
+.TP
+.B \-k
+Verify every directory checksum and that all data lies inside the archive.
+.TP
+.BI \-B " file"
+Write the boot block (block 0) to
+.IR file .
+.SH OPTIONS
+.TP
+.BI \-f " archive"
+Archive file; \fB\-\fR means standard input/output.
+.TP
+.B \-m
+Magtape layout: 62 directory blocks, 496 files, data from block 63 (default).
+.TP
+.B \-D
+DECtape layout: 24 directory blocks, 192 files, data from block 25, and the
+image is padded to the tape's 578 blocks. When reading, the layout is detected
+automatically unless \fB\-m\fR or \fB\-D\fR is given.
+.TP
+.BI \-C " dir"
+Change to
+.I dir
+first (the target directory for \fB\-x\fR, created if needed).
+.TP
+.BI \-T " list"
+Read file names, one per line, from
+.I list
+(\fB\-\fR for standard input). The order of the list is the order on the tape.
+.TP
+.BI \-b " file"
+Store the first 512 bytes of
+.I file
+as the boot block (default: zeros).
+.TP
+.B \-p
+When extracting, also restore set-uid/set-gid bits and, if run as root, the owner.
+Without it the archive can never create a set-id file.
+.TP
+.B \-i
+Report damaged directory entries but do not let them affect the exit status.
+.TP
+.BI \-U " uid" ", " \-G " gid"
+Store this uid/gid for every file. Real ids above 255 do not fit the format
+and are stored as 0.
+.TP
+.B \-v
+Verbose.
+.SH SAFETY
+Extraction refuses names containing "..", strips a leading "/", never follows
+symbolic links in the path and does not create set-id files unless
+.B \-p
+is given.
+.SH FORMAT
+See \fBv4-tp(5)\fR and \fBv4-fs(5)\fR.
+Times are 32-bit seconds since 1970, high-order word first; sizes are 24 bits;
+the 32 16-bit words of a directory entry sum to zero. Mode word:
+0100000 allocated, 04000 set-uid, 02000 set-gid, 0777 permissions.
+.SH EXIT STATUS
+0 success, 1 damaged archive or per-file errors, 2 usage or fatal error.
+.SH EXAMPLES
+.nf
+\*[PROG] -c -f src.tp -C project .            # magtape archive of ./project
+\*[PROG] -c -D -f small.tp a.c b.c            # DECtape image
+\*[PROG] -tv -f src.tp                        # long listing
+\*[PROG] -x -f src.tp -C /tmp/out sub/dir     # extract one subtree
+.fi
+.SH BUGS
+Only regular files are stored. Block padding is zero-filled; images written by
+the original tp contain stale bytes there. Updating or deleting entries in an
+existing archive is not supported; recreate it.

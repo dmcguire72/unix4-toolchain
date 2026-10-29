@@ -1,12 +1,13 @@
-.TH V4-DISASM 1 "October 27, 2026" "unix4-toolchain" "User Commands"
+.TH V4-DISASM 1 "October 27, 2026" "unix4-toolchain"
+.ds PROG v4-disasm
 .SH NAME
-v4-disasm \- PDP-11 disassembler
+\*[PROG] \- PDP-11 disassembler
 .SH SYNOPSIS
-.B v4-disasm
+.B \*[PROG]
 .RB [ \-a ] [ \-k ] [ \-n ] [ \-s ] [ \-v ] [ \-L\ \fIlabels\fR ]
 .I file
 .SH DESCRIPTION
-.I v4-disasm
+.I \*[PROG]
 disassembles PDP-11 binaries in the PDP-11 \fBa.out\fR format. It attempts to 
 distinguish between code and data by performing a recursive walk of the 
 executable segments, starting from the entry point and following 

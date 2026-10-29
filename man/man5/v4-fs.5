@@ -1,0 +1,291 @@
+.TH V4-FS 5 "September 7, 1973" "UNIX Fourth Edition"
+.ad l
+.ds AD l
+.nh
+.cflags 0 .?!
+.SH NAME
+v4-fs \- format of file system volume
+.SH DESCRIPTION
+.I "Caution: this information applies only to the latest versions of the UNIX system."
+.PP
+Every file system storage volume
+(e.g. RF disk, RK disk, RP disk, DECtape reel)
+has a common format for certain vital information.
+Every such volume is divided into a certain number
+of 256 word (512 byte) blocks.
+Block 0 is unused and is available to contain
+a bootstrap program, pack label, or other information.
+.PP
+Block 1 is the
+\fIsuper block.\fR
+Starting from its first word, the format of a super-block is
+.PP
+.RS
+.EX
+struct {
+	int	isize;
+	int	fsize;
+	int	nfree;
+	int	free[100];
+	int	ninode;
+	int	inode[100];
+	char	flock;
+	char	ilock;
+	char	fmod;
+	int	time[2];
+};
+.EE
+.RE
+.PP
+\fIIsize\fR
+is the number of blocks devoted to the i-list,
+which starts just after the super-block, in block 2.
+\fIFsize\fR
+is the first block not potentially available for allocation
+to a file.
+This number is unused by the system, but is used by
+programs like
+\fIcheck (I)\fR
+to test for bad block numbers.
+The free list for each volume is maintained as
+follows.
+The
+\fIfree\fR
+array contains, in
+\fIfree[1], ... , free[nfree\-1],\fR
+up to 99 numbers of free blocks.
+\fIFree[0]\fR
+is the block number of the head
+of a chain of blocks constituting the free list.
+The first word in each free-chain block is the number
+(up to 100) of free-block numbers listed in the
+next 100 words of this chain member.
+The first of these 100 blocks is the link to the
+next member of the chain.
+To allocate a block:
+decrement
+\fInfree,\fR
+and the new block is
+\fIfree[nfree].\fR
+If the new block number is 0,
+there are no blocks left, so give an error.
+If
+\fInfree\fR
+became 0,
+read in the block named by the new block number,
+replace
+\fInfree\fR
+by its first word,
+and copy the block numbers in the next 100 words into the
+\fIfree\fR
+array.
+To free a block, check if
+\fInfree\fR
+is 100; if so,
+copy
+\fInfree\fR
+and the
+\fIfree\fR
+array into it,
+write it out, and set
+\fInfree\fR
+to 0.
+In any event set
+\fIfree[nfree]\fR
+to the freed block's number and
+increment
+\fInfree.\fR
+.PP
+\fINinode\fR
+is the number of free i-numbers in the
+\fIinode\fR
+array.
+To allocate an i-node:
+if
+\fIninode\fR
+is greater than 0,
+decrement it and return
+\fIinode[ninode].\fR
+If it was 0, read the i-list
+and place the numbers of all free inodes
+(up to 100) into the
+\fIinode\fR
+array,
+then try again.
+To free an i-node,
+provided
+\fIninode\fR
+is less than 100,
+place its number into
+\fIinode[ninode]\fR
+and increment
+\fIninode.\fR
+If
+\fIninode\fR
+is already 100, don't bother to enter the freed i-node into any table.
+This list of i-nodes is only to speed
+up the allocation process; the information
+as to whether the inode is really free
+or not is maintained in the inode itself.
+.PP
+\fIFlock\fR
+and
+\fIilock\fR
+are flags maintained in the core
+copy of the file system
+while it is mounted
+and their values on disk are immaterial.
+The value of
+\fIfmod\fR
+on disk is likewise immaterial;
+it is used as a flag to indicate that the super-block has
+changed and should be copied to
+the disk during the next periodic update of file
+system information.
+.PP
+\fITime\fR
+is the last time the super-block of the file system was changed,
+and is a double-precision representation
+of the number of seconds that have elapsed
+since
+0000 Jan. 1 1970 (GMT).
+During a reboot, the
+\fItime\fR
+of the super-block for the root file system
+is used to set the system's idea of the time.
+.PP
+I-numbers begin at 1, and the storage for i-nodes
+begins in block 2.
+Also, i-nodes are 32 bytes long, so 16 of them fit into a block.
+Therefore, i-node
+\fIi\fR
+is located in block (\fIi\fR\~+\~31)\~/\~16, and begins
+32\^\(pc\^((\fIi\fR\~+\~31)\~(mod 16) bytes from its start.
+I-node 1 is reserved for the root directory of the file
+system, but no other i-number has a built-in
+meaning.
+Each i-node represents one file.
+The format of an i-node is as follows.
+.PP
+.RS
+.EX
+.ta 0.5i 1i 2.5i
+struct {
+	int	flags;	/* +0: see below */
+	char	nlinks;	/* +2: number of links to file */
+	char	uid;	/* +3: user ID of owner */
+	char	gid;	/* +4: group ID of owner */
+	char	size0;	/* +5: high byte of 24-bit size */
+	int	size1;	/* +6: low word of 24-bit size */
+	int	addr[8];	/* +8: block numbers or device number */
+	int	actime[2];	/* +24: time of last access */
+	int	modtime[2];	/* +28: time of last modification */
+};
+.EE
+.RE
+.PP
+The flags are as follows:
+.PP
+.TP 9n
+100000
+i-node is allocated
+.TP 9n
+060000
+2-bit file type:
+.RS 9n
+.TP 9n
+000000
+plain file
+.TP 9n
+040000
+directory
+.TP 9n
+020000
+character-type special file
+.TP 9n
+060000
+block-type special file.
+.RE
+.TP 9n
+010000
+large file
+.TP 9n
+004000
+set user-ID on execution
+.TP 9n
+002000
+set group-ID on execution
+.TP 9n
+000400
+read (owner)
+.TP 9n
+000200
+write (owner)
+.TP 9n
+000100
+execute (owner)
+.TP 9n
+000070
+read, write, execute (group)
+.TP 9n
+000007
+read, write, execute (others)
+.PP
+Special files are recognized by their flags
+and not by i-number.
+A block-type special file is basically one which
+can potentially be mounted as a file system;
+a character-type special file cannot, though it is
+not necessarily character-oriented.
+For special files the high byte of the first address word
+specifies the type of device; the low byte specifies
+one of several devices of
+that type.
+The device type numbers
+of block and character special files overlap.
+.PP
+The address words of ordinary files and directories
+contain the numbers of the blocks in the
+file (if it is small)
+or the numbers of indirect blocks (if the file
+is large).
+.PP
+Byte number
+\fIn\fR
+of a file is accessed as follows.
+\fIN\fR
+is divided by 512 to find its logical block number
+(say
+\fIb\fR)
+in the file.
+If the file is small (flag 010000 is 0),
+then
+\fIb\fR
+must be less than 8, and the physical
+block number is
+\fIaddr[b].\fR
+.PP
+If the file is large,
+\fIb\fR
+is divided by 256 to yield
+\fIi,\fR
+and
+\fIaddr[i]\fR
+is the physical block number of
+the indirect block.
+The remainder from the division
+yields the word in the indirect block
+which contains the number of the block for
+the sought-for byte.
+.PP
+For block
+\fIb\fR
+in a file to exist,
+it
+is not necessary that all blocks less than
+\fIb\fR
+exist.
+A zero block number either in the address words of
+the i-node or in an indirect block indicates that the
+corresponding block has never been allocated.
+Such a missing block reads as if it contained all zero words.
