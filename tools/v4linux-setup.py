@@ -454,7 +454,7 @@ class Installer:
             if not os.path.isfile(p):
                 raise InstallError(f"cannot find {p}")
 
-        self.man_src = os.path.join(os.path.dirname(bin_src), "man")
+        self.man_src = os.path.join(os.path.dirname(bin_src), "usr", "man")
         self.man_pages = self.collect_man_pages()
 
         if self.plan.local_root:
