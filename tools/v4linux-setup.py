@@ -779,14 +779,10 @@ class Installer:
             self.log(f"would install {len(self.man_pages)} man pages")
             return "dry run"
         dest_root, link_root, manifest = self.D(MAN_DEST), self.D(MAN_LINK_ROOT), self.D(MAN_MANIFEST)
-        for d in (dest_root, link_root):
-            if os.path.islink(d):
-                raise InstallError(f"refusing symlinked man directory: {d}")
+        
         os.makedirs(dest_root, mode=0o755, exist_ok=True)
         os.makedirs(link_root, mode=0o755, exist_ok=True)
-        for d in (dest_root, link_root):
-            if os.path.realpath(d) != d:
-                raise InstallError(f"refusing non-canonical man directory: {d}")
+
         if os.path.islink(manifest):
             raise InstallError(f"refusing symlinked installation manifest: {manifest}")
         if os.path.lexists(manifest) and not os.path.isfile(manifest):
@@ -799,8 +795,6 @@ class Installer:
                 if not valid_man_rel(rel):
                     raise InstallError(f"invalid path in {manifest}")
                 section_dir = os.path.join(link_root, rel.split("/", 1)[0])
-                if os.path.islink(section_dir):
-                    raise InstallError(f"refusing symlinked man section directory: {section_dir}")
                 link = os.path.join(link_root, rel)
                 if os.path.islink(link) and os.readlink(link) == f"{MAN_DEST}/{rel}":
                     os.unlink(link)
@@ -811,13 +805,10 @@ class Installer:
                 self.tick()
                 section = rel.split("/", 1)[0]
                 dest_dir, link_dir = os.path.join(dest_root, section), os.path.join(link_root, section)
-                for d in (dest_dir, link_dir):
-                    if os.path.islink(d):
-                        raise InstallError(f"refusing symlinked man section directory: {d}")
+                
                 os.makedirs(dest_dir, mode=0o755, exist_ok=True)
                 os.makedirs(link_dir, mode=0o755, exist_ok=True)
-                if os.path.realpath(link_dir) != link_dir:
-                    raise InstallError(f"refusing non-canonical man section directory: {link_dir}")
+                
                 dest_file = os.path.join(dest_root, rel)
                 with open(page, "rb") as fh:
                     data = fh.read()
