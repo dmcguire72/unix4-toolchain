@@ -186,35 +186,9 @@ mkdir -p v4
 curl -fL https://danielm.pages.dev/useful/unix_v4.tar.xz -o /tmp/unix_v4.tar.xz
 tar -xJf /tmp/unix_v4.tar.xz -C ./v4
 make -j$(nproc)
-sudo make install
 ```
 
-If all goes well:
-
-```bash
-$ # 
-$ sudo make install
-  INSTALL bin
-No Unix v4 root specified. Would you like to download it?
-  0 - No, exit
-  1 - Stock
-  2 - With symbols
-Selection [0-2]: 1
-'./.v4/stock' already exists. Redownload? [y/N]: n
-Installing persistence...
-Created symlink '/etc/systemd/system/multi-user.target.wants/v4linux.service' → '/etc/systemd/system/v4linux.service'.
-Persistence installed via systemd.
-setup complete.
-  V4 lower root: /opt/v4/sys
-  Emulator:      /opt/v4/bin/v4linux
-  Guest root:    /var/run/v4 (/)
-  Guest /tmp:    tmpfs at /var/run/v4/tmp
-  Host view:     /var/run/v4/host (/host)
-  Home view:     /var/run/v4/home (/home)
-  Dispatcher:    /usr/local/libexec/v4linux-dispatch
-  Magic 0407:    registered (07 01)
-  Magic 0410:    registered (08 01)
-```
+https://github.com/user-attachments/assets/27530cbd-5322-4f10-80e8-dc6f142ae4d7
 
 From there, you can use Unix v4 programs inside Linux:
 
