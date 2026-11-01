@@ -8,3 +8,4 @@ extra/**/*.b linguist-language=Basic
 **/*.c.inl linguist-language=C
 **/*.inl linguist-language=C
 tools/nob.h linguist-detectable=false
+usr/man/**/* linguist-language=Troff
