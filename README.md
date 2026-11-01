@@ -183,7 +183,7 @@ cc build.c -o build
 sudo ./build install
 ```
 
-https://github.com/user-attachments/assets/27530cbd-5322-4f10-80e8-dc6f142ae4d7
+https://github.com/user-attachments/assets/9949f3d5-ca4b-4b85-8076-87e012d4fada
 
 From there, you can use Unix v4 programs inside Linux:
 
