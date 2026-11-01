@@ -13,5 +13,8 @@ ttt.k
 *.v4dump
 **/__pycache__
 acast
+agg
 *.cast
 *.gif
+/build
+/build.old

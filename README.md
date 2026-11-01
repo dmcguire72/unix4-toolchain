@@ -175,17 +175,12 @@ Like any other executable file format, do not trust unknown PDP-11 a.out executa
 
 To get started:
 
-> [!NOTE]
->
-> [https://danielm.pages.dev/useful/unix_v4_debug.tar.xz](https://danielm.pages.dev/useful/unix_v4_debug.tar.xz) contains unstripped symbol rebuilds for most* of the binaries. Symbols allow both hook based patches to work (fixing time properly), and for more readable stacktraces in most cases of failure. The URL below in the code block however contains the original image, modified only to remove root nesting to limit the amount of commands to extract.
->
-> <sub>*All binaries with identical code segments when rebuilt were kept.</sub>
-
 ```bash
-mkdir -p v4
-curl -fL https://danielm.pages.dev/useful/unix_v4.tar.xz -o /tmp/unix_v4.tar.xz
-tar -xJf /tmp/unix_v4.tar.xz -C ./v4
-make -j$(nproc)
+cc build.c -o build 
+# build.c uses github.com/tsoding/nob.h
+# it will rebuild itself if build.c changes
+./build
+sudo ./build install
 ```
 
 https://github.com/user-attachments/assets/27530cbd-5322-4f10-80e8-dc6f142ae4d7

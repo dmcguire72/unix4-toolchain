@@ -8,3 +8,5 @@ example/**/*.b linguist-language=Basic
 **/*.c.inl linguist-language=C
 **/Makefile.* linguist-language=Makefile
 **/*.mk linguist-language=Makefile
+**/*.inl linguist-language=C
+tools/nob.h linguist-detectable=false
