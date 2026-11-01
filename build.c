@@ -11,6 +11,21 @@
 #define OBJ TMP "/obj"
 #define DEP TMP "/deps"
 
+static bool verbose = false;
+
+static void echo_cmd(Cmd cmd) {
+    if (!verbose) return;
+    String_Builder sb = {0};
+    cmd_render(cmd, &sb);
+    sb_append_null(&sb);
+    puts(sb.items);
+    fflush(stdout);
+    sb_free(sb);
+}
+
+#undef cmd_run
+#define cmd_run(cmd, ...) (echo_cmd(*(cmd)), nob_cmd_run(cmd, ##__VA_ARGS__))
+
 static const char *cflags[] = {"-std=gnu11", "-O3", "-Wall", "-Wno-unused-result"};
 
 static const char *emulator_src[] = {
@@ -34,12 +49,13 @@ static const char *as2_src[] = { S1_SRC"/as2.c", S1_SRC"/astab.c" };
 static Procs procs = {0};
 
 static void log_action(const char *action, const char *target) {
-    printf("  %-7s %s\n", action, target);
+    if (!verbose) printf("  %-7s %s\n", action, target);
 }
 
 static bool make_dir(const char *path) {
     if (!file_exists(path)) {
         log_action("MKDIR", path);
+        if (verbose) printf("mkdir %s\n", path);
         return mkdir_if_not_exists(path);
     }
     return true;
@@ -237,6 +253,9 @@ const char *check_cc_sh =
 int main(int argc, char **argv) {
     NOB_GO_REBUILD_URSELF(argc, argv);
     shift_args(&argc, &argv);
+
+    const char *v = getenv("V");
+    verbose = v && strcmp(v, "1") == 0;
 
     bool do_clean = false, do_strip = false, do_install = false, do_uninstall = false;
     bool do_check_as = false, do_check_cc = false, do_check_ld = false;
