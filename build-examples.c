@@ -1,3 +1,10 @@
+// usage:
+// $ cc build-examples.c -o build-examples
+// $ ./build-examples [all|strip|clean]...
+
+// this will rebuild itself if the source file is changed 
+// after the first build (given this files name is not changed)
+
 #define NOB_IMPLEMENTATION
 #define NOB_NO_ECHO
 #include "tools/nob.h"
@@ -180,22 +187,6 @@ static bool build_all(void) {
     return true;
 }
 
-static bool build_pvm(void) {
-    const char *src    = "extra/pvm/unix4/pvm.c";
-    const char *header = "extra/pvm/unix4/pvm-common.h";
-    const char *obj    = OBJ "/pvm.o";
-
-    if (!make_dir(OBJ)) return false;
-
-    const char *deps[] = { src, header };
-    if (needs_rebuild(obj, deps, NOB_ARRAY_LEN(deps)) <= 0) return true;
-
-    if (!copy_file(header, EXAMPLE "/pvm-common.h")) return false;
-    bool ok = compile_object(src, obj);
-    remove_file(EXAMPLE "/pvm-common.h");
-    return ok;
-}
-
 static void clean_all(void) {
     log_action("CLEAN", BIN " " OBJ);
     for (size_t i = 0; i < NOB_ARRAY_LEN(plain_src); ++i) {
@@ -234,16 +225,15 @@ int main(int argc, char **argv) {
     NOB_GO_REBUILD_URSELF(argc, argv);
     const char *program = shift_args(&argc, &argv);
 
-    bool do_clean = false, do_strip = false, do_pvm = false;
+    bool do_clean = false, do_strip = false;
 
     while (argc > 0) {
         const char *arg = shift_args(&argc, &argv);
         if (strcmp(arg, "all") == 0) continue;
         else if (strcmp(arg, "clean") == 0) do_clean = true;
         else if (strcmp(arg, "strip") == 0) do_strip = true;
-        else if (strcmp(arg, "pvm") == 0) do_pvm = true;
         else {
-            fprintf(stderr, "unknown target `%s`\nusage: %s [all|strip|clean|pvm]...\n", arg, program);
+            fprintf(stderr, "unknown target `%s`\nusage: %s [all|strip|clean]...\n", arg, program);
             return 2;
         }
     }
@@ -257,7 +247,5 @@ int main(int argc, char **argv) {
 
     if (!build_all()) return 1;
     if (do_strip && !strip_all()) return 1;
-    if (do_pvm && !build_pvm()) return 1;
-
     return 0;
 }

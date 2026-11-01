@@ -1,3 +1,10 @@
+// usage:
+// $ cc build.c -o build
+// $ ./build [all|strip|clean]...
+
+// this will rebuild itself if the source file is changed 
+// after the first build (given this files name is not changed)
+
 #define NOB_IMPLEMENTATION
 #define NOB_NO_ECHO
 #include "tools/nob.h"
