@@ -12,8 +12,7 @@ ttt.k
 /tmp
 *.v4dump
 **/__pycache__
-acast
-agg
+tools/bin/
 *.cast
 *.gif
 /build
