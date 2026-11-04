@@ -1,6 +1,4 @@
-main(argc, argv)
-int argc;
-char *argv[];
+main()
 {
 	printf("%f\n", 1.2 * 2.5);
 }

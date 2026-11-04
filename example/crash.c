@@ -1,10 +1,5 @@
-crash_here()
-{
-    return crash_here();
-}
-
 level_two() {
-    return crash_here();
+    return level_one();
 }
 
 level_one() {

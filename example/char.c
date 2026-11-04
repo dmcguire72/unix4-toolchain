@@ -1,6 +1,4 @@
-main(argc, argv)
-int argc;
-char *argv[];
+main()
 {
 	putchar('h');
 }

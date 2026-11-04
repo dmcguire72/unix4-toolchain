@@ -1,5 +1,4 @@
-main(argc, argv)
-char *argv[];
+main()
 {
 	char *str;
 
