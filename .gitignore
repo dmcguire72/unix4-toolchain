@@ -17,3 +17,4 @@ tools/bin/
 *.gif
 /build
 /build.old
+build-examples
