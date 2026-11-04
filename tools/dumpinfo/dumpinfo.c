@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <errno.h>
+#include <locale.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -387,22 +388,29 @@ static const char *cstr(const uint8_t **p, const uint8_t *end)
 
 static void show_identity(void)
 {
-	char tb[64] = "?";
+	char tb[64] = "?", lb[96] = "";
 	time_t t = (time_t)d.time;
-	struct tm *tm = gmtime(&t);
+	struct tm *tm;
 	uint32_t n;
 	const uint8_t *p, *end;
 	const char *exe = "";
 	unsigned i;
 
+	tm = gmtime(&t);
 	if (tm)
 		strftime(tb, sizeof tb, "%Y-%m-%d %H:%M:%S UTC", tm);
+	tm = localtime(&t);
+	if (tm && strftime(lb, sizeof lb, "%x %X %Z", tm) == 0)
+		lb[0] = 0;
 
 	printf("v4linux crash dump: %s\n", d.path);
 	printf("  format      V4DUMP %u.%u, %lu bytes, crc32 %08lx (%s)\n",
 	       d.ver_major, d.ver_minor, (unsigned long)d.len,
 	       (unsigned long)d.crc, d.crc_ok ? "ok" : "MISMATCH");
-	printf("  dumped      %s\n", tb);
+	printf("  dumped      %s", tb);
+	if (*lb)
+		printf(" (%s)", lb);
+	putchar('\n');
 
 	p = sect_data(V4D_SEC_PATH, &n);
 	if (p) {
@@ -852,6 +860,8 @@ int main(int argc, char **argv)
 	int have_mem = 0;
 	uint32_t mem_start = 0, mem_len = 0200;
 	const char *xfmt = NULL, *outpath = NULL;
+
+	setlocale(LC_TIME, "");
 
 	while ((opt = getopt(argc, argv, "arflpbycs:m:x:o:h")) != -1) {
 		switch (opt) {
