@@ -11,6 +11,73 @@ This repository contains a few components:
 - G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
 - H. dumpinfo, an inspector for the crash dumps the emulator writes when a program dies.
 
+## Building
+
+```bash
+cc build.c -o build 
+# build.c uses github.com/tsoding/nob.h
+# it will rebuild itself if build.c changes
+./build
+```
+
+Installation:
+
+```bash
+sudo ./build install
+```
+
+https://github.com/user-attachments/assets/9949f3d5-ca4b-4b85-8076-87e012d4fada
+
+From there, you can use Unix v4 programs inside Linux:
+
+> [!NOTE]
+>
+>If you experience issues with original V4 binaries, file an issue, and a patch for emulator (or a symbol hook) will be looked into!
+
+```bash
+$ /opt/v4/sys/bin/sh
+% ls /
+bin
+dev
+etc
+home # Host /home
+host # Host /
+lib
+mnt
+tmp
+unix
+usr
+% echo hello world > file.txt
+% cat file.txt | /host/usr/bin/grep hello
+hello world
+```
+
+To remove it:
+
+```bash
+sudo v4-uninstall [--purge-v4] [--purge-bin] [--purge-all]
+```
+
+- --purge-v4      Also delete /opt/v4/sys
+- --purge-bin     Also delete /opt/v4/bin
+- --purge-all     Delete both /opt/v4/sys and /opt/v4/bin
+
+This also installs the native toolchain:
+
+```bash
+$ ls -l /usr/bin/v4*
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ar -> /opt/v4/bin/ar
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as -> /opt/v4/bin/as
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as2 -> /opt/v4/bin/as2
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc -> /opt/v4/bin/cc11
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc0 -> /opt/v4/bin/cc0
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc1 -> /opt/v4/bin/cc1
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-disasm -> /opt/v4/bin/v4dis
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ld -> /opt/v4/bin/ld
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-strip -> /opt/v4/bin/strip
+lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-uninstall -> /opt/v4/bin/uninstall
+```
+
 ## A. CC
 
 The CC Compiler is built of many pieces, as the original had memory constraints:
@@ -170,70 +237,6 @@ strip file ...
 The userspace emulator translates Unix V4 syscalls to POSIX, and handles host integrations.
 
 Like any other executable file format, do not trust unknown PDP-11 a.out executables (can be identified via the file command) or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
-
-### Setting up the emulator
-
-To get started:
-
-```bash
-cc build.c -o build 
-# build.c uses github.com/tsoding/nob.h
-# it will rebuild itself if build.c changes
-./build
-sudo ./build install
-```
-
-https://github.com/user-attachments/assets/9949f3d5-ca4b-4b85-8076-87e012d4fada
-
-From there, you can use Unix v4 programs inside Linux:
-
-> [!NOTE]
->
->If you experience issues with original V4 binaries, file an issue, and a patch for emulator (or a symbol hook) will be looked into!
-
-```bash
-$ /opt/v4/sys/bin/sh
-% ls /
-bin
-dev
-etc
-home # Host /home
-host # Host /
-lib
-mnt
-tmp
-unix
-usr
-% echo hello world > file.txt
-% cat file.txt | /host/usr/bin/grep hello
-hello world
-```
-
-To remove it:
-
-```bash
-sudo v4-uninstall [--purge-v4] [--purge-bin] [--purge-all]
-```
-
-- --purge-v4      Also delete /opt/v4/sys
-- --purge-bin     Also delete /opt/v4/bin
-- --purge-all     Delete both /opt/v4/sys and /opt/v4/bin
-
-This also installs the native toolchain:
-
-```bash
-$ ls -l /usr/bin/v4*
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ar -> /opt/v4/bin/ar
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as -> /opt/v4/bin/as
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-as2 -> /opt/v4/bin/as2
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc -> /opt/v4/bin/cc11
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc0 -> /opt/v4/bin/cc0
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-cc1 -> /opt/v4/bin/cc1
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-disasm -> /opt/v4/bin/v4dis
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-ld -> /opt/v4/bin/ld
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-strip -> /opt/v4/bin/strip
-lrwxrwxrwx 1 root root -- MMM DD --:-- /usr/bin/v4-uninstall -> /opt/v4/bin/uninstall
-```
 
 ## G. Disassembler
 
