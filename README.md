@@ -1,17 +1,44 @@
 # Modern Unix Fourth Edition Toolchain (PDP-11)
 
+## Preface
+
+This projects provides the Unix 4 Toolchain ported to modern GNU/Linux (all but the C compiler optimization pass is complete!) and a working userspace translation layer and emulator (v4linux).
+
 ## Table of contents
 
 - [Building](#building)
 - [Installation](#installation)
-- [A. CC for GNU/Linux (targetting Unix v4 with PDP-11 assembly)](#a-cc)
-- [B. AS for GNU/Linux (targetting Unix v4 with the PDP-11 a.out file format)](#b-as)
-- [C. LD for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)](#c-ld)
-- [D. AR for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)](#d-ar)
-- [E. STRIP for GNU/Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)](#e-strip)
-- [F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.](#f-userspace-emulator)
-- [G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.](#g-disassembler)
-- [H. dumpinfo, an inspector for the crash dumps the emulator writes when a program dies.](#h-crash-dumps-dumpinfo)
+  - [Dependencies](#dependencies)
+    - [Minimal](#minimal)
+    - [Full](#full)
+  - [Using the Installer](#using-the-installer)
+  - [Uninstall](#uninstall)
+- [A. CC](#a-cc)
+  - [A. cc11](#a-cc11)
+    - [CC Options](#cc-options)
+  - [B. Pass 0](#b-pass-0)
+    - [CC0 Options](#cc0-options)
+  - [C. Pass 1](#c-pass-1)
+    - [CC1 Options](#cc1-options)
+  - [D. cvopt](#d-cvopt)
+    - [CVOPT Options](#cvopt-options)
+- [B. AS](#b-as)
+  - [A. as1 (as)](#a-as1-as)
+    - [AS Options](#as-options)
+  - [B. as2](#b-as2)
+    - [AS2 Options](#as2-options)
+- [C. LD](#c-ld)
+  - [Options](#options)
+- [D. AR](#d-ar)
+  - [Keys](#keys)
+- [E. STRIP](#e-strip)
+- [F. Userspace emulator](#f-userspace-emulator)
+  - [Using the emulator](#using-the-emulator)
+- [G. Disassembler](#g-disassembler)
+  - [A. v4dis](#a-v4dis)
+    - [Disassembler Options](#disassembler-options)
+- [H. Crash dumps (dumpinfo)](#h-crash-dumps-dumpinfo)
+  - [Dumpinfo Options](#dumpinfo-options)
 
 ## Building
 
