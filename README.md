@@ -1,15 +1,17 @@
 # Modern Unix Fourth Edition Toolchain (PDP-11)
 
-This repository contains a few components:
+## Table of contents
 
-- A. CC for GNU/Linux (targetting Unix v4 with PDP-11 assembly)
-- B. AS for GNU/Linux (targetting Unix v4 with the PDP-11 a.out file format)
-- C. LD for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)
-- D. AR for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)
-- E. STRIP for GNU/Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)
-- F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.
-- G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
-- H. dumpinfo, an inspector for the crash dumps the emulator writes when a program dies.
+- [Building](#building)
+- [Installation](#installation)
+- [A. CC for GNU/Linux (targetting Unix v4 with PDP-11 assembly)](#a-cc)
+- [B. AS for GNU/Linux (targetting Unix v4 with the PDP-11 a.out file format)](#b-as)
+- [C. LD for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)](#c-ld)
+- [D. AR for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)](#d-ar)
+- [E. STRIP for GNU/Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)](#e-strip)
+- [F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.](#f-userspace-emulator)
+- [G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.](#g-disassembler)
+- [H. dumpinfo, an inspector for the crash dumps the emulator writes when a program dies.](#h-crash-dumps-dumpinfo)
 
 ## Building
 
@@ -26,6 +28,8 @@ rm build.old
 
 ### Dependencies
 
+> [!NOTE]
+>
 > If optional system libraries are available (libarchive, libcurl, ncurses), they will be used. Without ncurses, the UI falls back to plaintext.
 >
 > If libraries are not available, the installer selectively shells out to `tar`, `gzip`, and `curl`/`wget` instead of depending on missing libraries.
@@ -62,30 +66,6 @@ sudo tmp/v4linux-setup [--help]
 ```
 
 https://github.com/user-attachments/assets/9949f3d5-ca4b-4b85-8076-87e012d4fada
-
-### Using the emulator
-
-> [!NOTE]
->
->If you experience issues with original V4 binaries, file an issue, and a patch for emulator (or a symbol hook) will be looked into!
-
-```bash
-$ /opt/v4/sys/bin/sh
-% ls /
-bin
-dev
-etc
-home # Host /home
-host # Host /
-lib
-mnt
-tmp
-unix
-usr
-% echo hello world > file.txt
-% cat file.txt | /host/usr/bin/grep hello
-hello world
-```
 
 ### Uninstall
 
@@ -269,11 +249,37 @@ strip file ...
 
 ## F. Userspace emulator
 
+> [!NOTE]
+>
+> PDP-11 Executables can be identified via the file command on most non-containerized distributions, if unrecognized, install magic definitions for your specific GNU/Linux distribution.
+
 The userspace emulator translates Unix V4 syscalls to POSIX, and handles host integrations.
 
 Like any other executable file format, do not trust unknown PDP-11 a.out executables or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
 
-> PDP-11 Executables can be identified via the file command on most non-containerized distributions, if unrecognized, install magic definitions for your specific GNU/Linux distribution.
+### Using the emulator
+
+> [!NOTE]
+>
+>If you experience issues with original V4 binaries, file an issue, and a patch for emulator (or a symbol hook) will be looked into!
+
+```bash
+$ /opt/v4/sys/bin/sh
+% ls /
+bin
+dev
+etc
+home # Host /home
+host # Host /
+lib
+mnt
+tmp
+unix
+usr
+% echo hello world > file.txt
+% cat file.txt | /host/usr/bin/grep hello
+hello world
+```
 
 ## G. Disassembler
 
