@@ -2,11 +2,11 @@
 
 This repository contains a few components:
 
-- A. CC for Linux (targetting Unix v4 with PDP-11 assembly)
-- B. AS for Linux (targetting Unix v4 with the PDP-11 a.out file format)
-- C. LD for Linux (targetting Unix v4 for the PDP-11 a.out file format)
-- D. AR for Linux (targetting Unix v4 for the PDP-11 a.out file format)
-- E. STRIP for Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)
+- A. CC for GNU/Linux (targetting Unix v4 with PDP-11 assembly)
+- B. AS for GNU/Linux (targetting Unix v4 with the PDP-11 a.out file format)
+- C. LD for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)
+- D. AR for GNU/Linux (targetting Unix v4 for the PDP-11 a.out file format)
+- E. STRIP for GNU/Linux (targetting the Unix v4 symbols in PDP-11 a.out file format)
 - F. A Unix v4 subsystem for linux using binfmt_misc, syscall translation, long path handling, and a minimal PDP-11 CPU (11/45 + EIS) and FP-11 FPU emulator.
 - G. A Disassembler for binaries compiled with this toolchain, or the stock Unix 4 toolchain.
 - H. dumpinfo, an inspector for the crash dumps the emulator writes when a program dies.
@@ -18,17 +18,52 @@ cc build.c -o build
 # build.c uses github.com/tsoding/nob.h
 # it will rebuild itself if build.c changes
 ./build
+# if rebuilt, you might want to:
+rm build.old
 ```
 
-Installation:
+## Installation
+
+### Dependencies
+
+> If optional system libraries are available (libarchive, libcurl, ncurses), they will be used. Without ncurses, the UI falls back to plaintext.
+>
+> If libraries are not available, the installer selectively shells out to `tar`, `gzip`, and `curl`/`wget` instead of depending on missing libraries.
+
+#### Minimal
 
 ```bash
+# fedora
+sudo dnf install gcc util-linux kmod curl tar xz gzip
+# arch
+sudo pacman -S --needed base-devel util-linux kmod curl tar xz gzip
+# ubuntu
+sudo apt install build-essential util-linux kmod curl tar xz-utils gzip
+```
+
+#### Full
+
+```bash
+# fedora
+sudo dnf install gcc util-linux kmod tar xz ncurses-devel libcurl-devel libarchive-devel zlib-devel
+# arch
+sudo pacman -S --needed base-devel util-linux kmod tar xz ncurses curl libarchive zlib
+# ubuntu
+sudo apt install build-essential util-linux kmod tar xz-utils libncurses-dev libcurl4-openssl-dev libarchive-dev zlib1g-dev
+```
+
+### Using the Installer
+
+```bash
+# build + launch installer
 sudo ./build install
+# optionally use installer CLI
+sudo tmp/v4linux-setup [--help]
 ```
 
 https://github.com/user-attachments/assets/9949f3d5-ca4b-4b85-8076-87e012d4fada
 
-From there, you can use Unix v4 programs inside Linux:
+### Using the emulator
 
 > [!NOTE]
 >
@@ -52,7 +87,7 @@ usr
 hello world
 ```
 
-To remove it:
+### Uninstall
 
 ```bash
 sudo v4-uninstall [--purge-v4] [--purge-bin] [--purge-all]
@@ -236,7 +271,9 @@ strip file ...
 
 The userspace emulator translates Unix V4 syscalls to POSIX, and handles host integrations.
 
-Like any other executable file format, do not trust unknown PDP-11 a.out executables (can be identified via the file command) or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
+Like any other executable file format, do not trust unknown PDP-11 a.out executables or run them on your system. They can exec/fork other non PDP-11 binaries on your system, use file descriptors, and properly inherit root privileges if launched as root or via `sudo`.
+
+> PDP-11 Executables can be identified via the file command on most non-containerized distributions, if unrecognized, install magic definitions for your specific GNU/Linux distribution.
 
 ## G. Disassembler
 

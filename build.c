@@ -7,6 +7,7 @@
 
 #define NOB_IMPLEMENTATION
 #define NOB_NO_ECHO
+#define NOBDEF static inline
 #include "tools/nob.h"
 
 #define USR "usr"
@@ -120,7 +121,7 @@ static bool compile_group(const char **srcs, size_t count, const char *obj_dir, 
             log_action("CC", obj);
             Cmd cmd = {0};
             cmd_append(&cmd, "cc");
-            da_append_many(&cmd, cflags, NOB_ARRAY_LEN(cflags));
+            da_append_many(&cmd, cflags, ARRAY_LEN(cflags));
             cmd_append(&cmd, "-MMD", "-MP", "-MF", dep, "-MT", obj);
             for (size_t j = 0; j < incs_count; ++j) cmd_append(&cmd, temp_sprintf("-I%s", incs[j]));
             cmd_append(&cmd, "-c", src, "-o", obj);
@@ -136,7 +137,7 @@ static bool compile_direct(const char *src, const char *bin, const char *dep, co
     log_action("CC", bin);
     Cmd cmd = {0};
     cmd_append(&cmd, "cc");
-    da_append_many(&cmd, cflags, NOB_ARRAY_LEN(cflags));
+    da_append_many(&cmd, cflags, ARRAY_LEN(cflags));
     cmd_append(&cmd, "-MMD", "-MP", "-MF", dep, "-MT", bin);
     for(size_t i = 0; i < extra_flags_count; i++) cmd_append(&cmd, extra_flags[i]);
     for(size_t i = 0; i < incs_count; i++) cmd_append(&cmd, temp_sprintf("-I%s", incs[i]));
@@ -149,11 +150,74 @@ static bool link_bin(const char *bin, const char **objs, size_t obj_count, bool 
     log_action("LD", bin);
     Cmd cmd = {0};
     cmd_append(&cmd, "cc");
-    da_append_many(&cmd, cflags, NOB_ARRAY_LEN(cflags));
+    da_append_many(&cmd, cflags, ARRAY_LEN(cflags));
     cmd_append(&cmd, "-o", bin);
     da_append_many(&cmd, objs, obj_count);
     if (math) cmd_append(&cmd, "-lm");
     return cmd_run(&cmd, .async = &procs);
+}
+
+static bool probe_lib(const char *header, const char *body, const char *lib) {
+    FILE *f = fopen(TMP"/probe.c", "w");
+    if (!f) return false;
+    fprintf(f, "%s\nint main(void) { %s }\n", header, body);
+    fclose(f);
+    Cmd cmd = {0};
+    cmd_append(&cmd, "cc", "-o", TMP"/probe", TMP"/probe.c", lib);
+    return nob_cmd_run(&cmd, .stdout_path = "/dev/null", .stderr_path = "/dev/null");
+}
+
+static bool build_installer(void) {
+    const char *defs[8], *libs[8];
+    size_t ndefs = 0, nlibs = 0;
+    String_Builder stamp = {0};
+    sb_append_cstr(&stamp, "v1");
+
+    #define PROBE(label, header, body, lib, ...) do { \
+        bool ok_ = probe_lib(header, body, lib); \
+        printf("  CHECK   %-10s %s\n", label, ok_ ? "yes" : "no (using the fallback)"); \
+        if (ok_) { const char *d_[] = {__VA_ARGS__}; \
+            for (size_t i_ = 0; i_ < sizeof d_ / sizeof *d_; i_++) { defs[ndefs++] = d_[i_]; sb_append_cstr(&stamp, d_[i_]); } \
+            libs[nlibs++] = lib; sb_append_cstr(&stamp, lib); } \
+    } while (0)
+
+    #define NCURSES_BODY "return initscr() == NULL;"
+    if (probe_lib("#include <ncurses.h>", NCURSES_BODY, "-lncursesw")) {
+        printf("  CHECK   %-10s yes (wide characters)\n", "ncurses");
+        defs[ndefs++] = "-DV4_HAVE_NCURSES"; defs[ndefs++] = "-DV4_NCURSESW"; libs[nlibs++] = "-lncursesw";
+        sb_append_cstr(&stamp, "ncursesw");
+    } else if (probe_lib("#include <ncurses.h>", NCURSES_BODY, "-lncurses")) {
+        printf("  CHECK   %-10s yes (no wide characters: ASCII glyphs only)\n", "ncurses");
+        defs[ndefs++] = "-DV4_HAVE_NCURSES"; libs[nlibs++] = "-lncurses";
+        sb_append_cstr(&stamp, "ncurses");
+    } else {
+        printf("  CHECK   %-10s no (using the plain-text UI)\n", "ncurses");
+    }
+    PROBE("libcurl",    "#include <curl/curl.h>", "curl_easy_cleanup(curl_easy_init()); return 0;", "-lcurl", "-DV4_HAVE_CURL");
+    PROBE("libarchive", "#include <archive.h>\n#include <archive_entry.h>", "archive_read_free(archive_read_new()); return 0;", "-larchive", "-DV4_HAVE_LIBARCHIVE");
+    PROBE("zlib",       "#include <zlib.h>", "return deflateEnd((z_streamp)0);", "-lz", "-DV4_HAVE_ZLIB");
+    unlink(TMP"/probe.c"); unlink(TMP"/probe");
+
+    const char *stamp_file = TMP"/v4linux-setup.cfg";
+    String_Builder old = {0};
+    if (!file_exists(stamp_file) || !read_entire_file(stamp_file, &old) || old.count != stamp.count || memcmp(old.items, stamp.items, stamp.count) != 0) {
+        unlink(TMP"/v4linux-setup");
+        write_entire_file(stamp_file, stamp.items, stamp.count);
+    }
+    sb_free(old); sb_free(stamp);
+
+    const char *bin = TMP"/v4linux-setup", *dep = DEP"/bin/v4linux-setup.d";
+    if (!make_dir(DEP"/bin")) return false;
+    if (!check_needs_rebuild(bin, dep)) return true;
+    log_action("CC", bin);
+    Cmd cmd = {0};
+    cmd_append(&cmd, "cc");
+    da_append_many(&cmd, cflags, ARRAY_LEN(cflags));
+    cmd_append(&cmd, "-pthread", "-MMD", "-MP", "-MF", dep, "-MT", bin);
+    for (size_t i = 0; i < ndefs; i++) cmd_append(&cmd, defs[i]);
+    cmd_append(&cmd, "-o", bin, "tools/v4linux-setup.c");
+    for (size_t i = 0; i < nlibs; i++) cmd_append(&cmd, libs[i]);
+    return cmd_run(&cmd);
 }
 
 static bool build_all() {
@@ -165,7 +229,7 @@ static bool build_all() {
         OBJ"/bld", DEP"/bld",
         DEP"/bin"
     };
-    for (size_t i = 0; i < NOB_ARRAY_LEN(dirs); ++i) {
+    for (size_t i = 0; i < ARRAY_LEN(dirs); ++i) {
         if (!make_dir(dirs[i])) return false;
     }
 
@@ -173,14 +237,14 @@ static bool build_all() {
         log_action("CC", BIN"/cvopt");
         Cmd cmd = {0};
         cmd_append(&cmd, "cc");
-        da_append_many(&cmd, cflags, NOB_ARRAY_LEN(cflags));
+        da_append_many(&cmd, cflags, ARRAY_LEN(cflags));
         cmd_append(&cmd, "-MMD", "-MP", "-MF", DEP"/bin/cvopt.d", "-MT", BIN"/cvopt");
         cmd_append(&cmd, "-o", BIN"/cvopt", C_SRC"/cvopt.c");
         if (!cmd_run(&cmd)) return false;
     }
 
     const char *tabs[] = {"regtab", "efftab", "cctab", "sptab"};
-    for (size_t i = 0; i < NOB_ARRAY_LEN(tabs); ++i) {
+    for (size_t i = 0; i < ARRAY_LEN(tabs); ++i) {
         const char *src = temp_sprintf("tables/%s.s", tabs[i]);
         const char *dst = temp_sprintf(BLD"/%s.c", tabs[i]);
         
@@ -200,12 +264,12 @@ static bool build_all() {
     const char *s1_incs[]  = { "src" };
     const char *emu_incs[] = { "tools/emulator", "tools/common" };
 
-    if (!compile_group(pass0_src, NOB_ARRAY_LEN(pass0_src), OBJ"/c", DEP"/c", c_incs, 1, &pass0_objs)) return false;
-    if (!compile_group(pass1_src, NOB_ARRAY_LEN(pass1_src), OBJ"/c", DEP"/c", c_incs, 1, &pass1_objs)) return false;
-    if (!compile_group(tables_src, NOB_ARRAY_LEN(tables_src), OBJ"/bld", DEP"/bld", c_incs, 1, &pass1_objs)) return false;
-    if (!compile_group(as_src, NOB_ARRAY_LEN(as_src), OBJ"/s1", DEP"/s1", s1_incs, 1, &as_objs)) return false;
-    if (!compile_group(as2_src, NOB_ARRAY_LEN(as2_src), OBJ"/s1", DEP"/s1", s1_incs, 1, &as2_objs)) return false;
-    if (!compile_group(emulator_src, NOB_ARRAY_LEN(emulator_src), OBJ"/emulator", DEP"/emulator", emu_incs, 2, &emulator_objs)) return false;
+    if (!compile_group(pass0_src, ARRAY_LEN(pass0_src), OBJ"/c", DEP"/c", c_incs, 1, &pass0_objs)) return false;
+    if (!compile_group(pass1_src, ARRAY_LEN(pass1_src), OBJ"/c", DEP"/c", c_incs, 1, &pass1_objs)) return false;
+    if (!compile_group(tables_src, ARRAY_LEN(tables_src), OBJ"/bld", DEP"/bld", c_incs, 1, &pass1_objs)) return false;
+    if (!compile_group(as_src, ARRAY_LEN(as_src), OBJ"/s1", DEP"/s1", s1_incs, 1, &as_objs)) return false;
+    if (!compile_group(as2_src, ARRAY_LEN(as2_src), OBJ"/s1", DEP"/s1", s1_incs, 1, &as2_objs)) return false;
+    if (!compile_group(emulator_src, ARRAY_LEN(emulator_src), OBJ"/emulator", DEP"/emulator", emu_incs, 2, &emulator_objs)) return false;
 
     const char *no_fmt_trunc[] = { "-Wno-format-truncation" };
     const char *dumpinfo_incs[] = { "tools/common" };
@@ -258,8 +322,8 @@ const char *check_cc_sh =
 
 
 int main(int argc, char **argv) {
-    NOB_GO_REBUILD_URSELF(argc, argv);
-    shift_args(&argc, &argv);
+    GO_REBUILD_URSELF(argc, argv);
+    shift(argv, argc);
 
     const char *v = getenv("V");
     verbose = v && strcmp(v, "1") == 0;
@@ -270,7 +334,7 @@ int main(int argc, char **argv) {
     bool do_dis_check = false;
 
     while (argc > 0) {
-        const char *arg = shift_args(&argc, &argv);
+        const char *arg = shift(argv, argc);
         if (strcmp(arg, "clean") == 0) do_clean = true;
         else if (strcmp(arg, "strip") == 0) do_strip = true;
         else if (strcmp(arg, "install") == 0) do_install = true;
@@ -306,7 +370,7 @@ int main(int argc, char **argv) {
             BIN"/cc0", BIN"/cc1", BIN"/cc11", BIN"/v4linux",
             BIN"/v4linux-dispatch", BIN"/v4dis", BIN"/dumpinfo"
         };
-        for (size_t i = 0; i < NOB_ARRAY_LEN(strip_targets); ++i) {
+        for (size_t i = 0; i < ARRAY_LEN(strip_targets); ++i) {
             log_action("STRIP", strip_targets[i]);
             Cmd c = {0}; cmd_append(&c, "strip", strip_targets[i]);
             if (!cmd_run(&c, .async = &procs)) return 1;
@@ -315,8 +379,9 @@ int main(int argc, char **argv) {
     }
 
     if (do_install) {
+        if (!build_installer()) return 1;
         log_action("INSTALL", BIN);
-        Cmd c = {0}; cmd_append(&c, "./tools/v4linux-setup.py", BIN);
+        Cmd c = {0}; cmd_append(&c, TMP"/v4linux-setup", BIN);
         if (!cmd_run(&c)) return 1;
     }
 

@@ -181,10 +181,16 @@ fi
 remove_installed_magic
 remove_installed_man_pages
 
-if systemctl list-unit-files v4linux.service &>/dev/null || [[ -f "$SERVICE_FILE" ]]; then
+have_systemd() {
+    [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1
+}
+
+if have_systemd; then
     systemctl disable --now v4linux.service 2>/dev/null || true
-    rm -f -- "$SERVICE_FILE"
-    systemctl daemon-reload
+fi
+rm -f -- "$SERVICE_FILE"
+if have_systemd; then
+    systemctl daemon-reload || true
 fi
 
 rm -f -- "$RUNTIME_SCRIPT"
@@ -218,7 +224,7 @@ rmdir "$HOST_STAGING" 2>/dev/null || true
 rmdir "$GUEST_ROOT" 2>/dev/null || true
 rm -f -- "$DISPATCH_DEST"
 
-for tool in as as2 cc0 cc1 cc11 ar ld strip v4dis dumpinfo; do
+for tool in as as2 cc0 cc1 cc11 ar ld tp strip v4dis dumpinfo; do
     case "$tool" in
         cc11)     link_name="v4-cc" ;;
         v4dis)    link_name="v4-disasm" ;;

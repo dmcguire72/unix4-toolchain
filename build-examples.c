@@ -7,6 +7,7 @@
 
 #define NOB_IMPLEMENTATION
 #define NOB_NO_ECHO
+#define NOBDEF static inline
 #include "tools/nob.h"
 
 #include <sys/stat.h>
